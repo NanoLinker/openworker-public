@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE="ghcr.io/nanolinker/openworker-agent:latest"
+CONTAINER_NAME="openworker-agent"
+SERVER_URL="${SERVER_URL:?请设置 SERVER_URL，例如 SERVER_URL=http://your-server:3000}"
+OPENCLAW_DATA_DIR="${OPENCLAW_DATA_DIR:-/data/openworker}"
+REPORT_INTERVAL="${REPORT_INTERVAL:-60000}"
+
+# ── 检查参数 ──────────────────────────────────────────
+if [ -z "${DEPLOY_ID:-}" ] || [ -z "${AGENT_KEY:-}" ] || [ -z "${SERVER_URL:-}" ]; then
+  echo "用法："
+  echo "  curl -sSL <url>/install.sh | SERVER_URL=http://x.x.x.x:3000 DEPLOY_ID=<id> AGENT_KEY=<key> bash"
+  echo ""
+  echo "必填参数："
+  echo "  SERVER_URL  管理端地址"
+  echo "  DEPLOY_ID   Server 分配的部署 ID"
+  echo "  AGENT_KEY   Agent 认证密钥（ow_ 前缀）"
+  echo ""
+  echo "可选参数："
+  echo "  OPENCLAW_DATA_DIR  OpenClaw 数据目录（默认 /data/openworker）"
+  echo "  REPORT_INTERVAL    上报间隔毫秒（默认 60000）"
+  exit 1
+fi
+
+# ── 检查 Docker ───────────────────────────────────────
+if ! command -v docker &>/dev/null; then
+  echo "错误：未安装 Docker"
+  exit 1
+fi
+
+if ! docker info &>/dev/null; then
+  echo "错误：Docker daemon 未运行"
+  exit 1
+fi
+
+echo "=== OpenWorker Agent 部署 ==="
+echo "  镜像：$IMAGE"
+echo "  Server：$SERVER_URL"
+echo "  Deploy ID：$DEPLOY_ID"
+echo "  数据目录：$OPENCLAW_DATA_DIR"
+echo ""
+
+# ── 清理旧容器 ────────────────────────────────────────
+if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+  echo "停止并删除旧容器..."
+  docker stop "$CONTAINER_NAME" 2>/dev/null || true
+  docker rm "$CONTAINER_NAME" 2>/dev/null || true
+fi
+
+# ── 拉取最新镜像 ──────────────────────────────────────
+echo "拉取最新镜像..."
+docker pull "$IMAGE"
+
+# ── 启动容器 ──────────────────────────────────────────
+echo "启动容器..."
+docker run -d \
+  --name "$CONTAINER_NAME" \
+  --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /proc:/host/proc:ro \
+  -v /sys:/host/sys:ro \
+  -v "${OPENCLAW_DATA_DIR}:${OPENCLAW_DATA_DIR}:ro" \
+  -e SERVER_URL="$SERVER_URL" \
+  -e DEPLOY_ID="$DEPLOY_ID" \
+  -e AGENT_KEY="$AGENT_KEY" \
+  -e REPORT_INTERVAL="$REPORT_INTERVAL" \
+  -e OPENCLAW_DATA_DIR="$OPENCLAW_DATA_DIR" \
+  "$IMAGE"
+
+# ── 验证 ──────────────────────────────────────────────
+echo ""
+echo "等待启动..."
+sleep 3
+
+if docker ps --filter "name=${CONTAINER_NAME}" --filter "status=running" -q | grep -q .; then
+  echo "=== 部署成功 ==="
+  echo ""
+  docker logs "$CONTAINER_NAME" 2>&1 | tail -10
+else
+  echo "=== 部署失败 ==="
+  echo "容器日志："
+  docker logs "$CONTAINER_NAME" 2>&1 | tail -20
+  exit 1
+fi

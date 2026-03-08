@@ -137,7 +137,7 @@ fi
 # ── 8. 新建模式：分配端口 + 创建数据目录 ─────────────
 if [ -z "$PORT" ]; then
   # Auto-assign port starting from 18790
-  USED_PORTS=$(docker ps -a --filter "label=openworker.worker-id" --format '{{.Ports}}' | grep -oE '0\.0\.0\.0:[0-9]+' | cut -d: -f2 | sort -n)
+  USED_PORTS=$(docker ps -a --filter "label=openworker.worker-id" --format '{{.Ports}}' | grep -oE '0\.0\.0\.0:[0-9]+' | cut -d: -f2 | sort -n || true)
   PORT=18790
   while echo "$USED_PORTS" | grep -q "^${PORT}$"; do
     PORT=$((PORT + 1))

@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# OpenWorker Bot One-Click Deploy Script
+#
+# Usage:
+#   curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+#     GHCR_TOKEN=ghp_xxx \
+#     WORKER_ID=ow-abc123 \
+#     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
+#     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+#     TZ=Asia/Shanghai \
+#     DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
+#     DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
+#     bash
+#
+# Re-run the same command to upgrade (pull new image + update env + keep data).
+# ============================================================
+
+IMAGE="ghcr.io/nanolinker/openworker:latest"
+DATA_DIR="${DATA_DIR:-/data/openworker}"
+MODEL_CONTEXT_WINDOW="${MODEL_CONTEXT_WINDOW:-204800}"
+MODEL_MAX_TOKENS="${MODEL_MAX_TOKENS:-196608}"
+
+# ── Helper ────────────────────────────────────────────
+die() { echo "错误：$1" >&2; exit 1; }
+
+# ── 1. 检查必填参数 ───────────────────────────────────
+REQUIRED_VARS=(
+  GHCR_TOKEN
+  WORKER_ID
+  MODEL_PROVIDER MODEL_ID MODEL_NAME MODEL_API_KEY MODEL_BASE_URL
+  TZ
+  DINGTALK_CLIENT_ID DINGTALK_CLIENT_SECRET DINGTALK_ROBOT_CODE DINGTALK_CORP_ID
+)
+
+missing=()
+for var in "${REQUIRED_VARS[@]}"; do
+  [ -z "${!var:-}" ] && missing+=("$var")
+done
+
+if [ ${#missing[@]} -gt 0 ]; then
+  echo "缺少必填参数：${missing[*]}"
+  echo ""
+  echo "用法："
+  echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
+  echo "    GHCR_TOKEN=ghp_xxx \\"
+  echo "    WORKER_ID=<id> \\"
+  echo "    MODEL_PROVIDER=custom MODEL_ID=<model> MODEL_NAME=<name> \\"
+  echo "    MODEL_API_KEY=<key> MODEL_BASE_URL=<url> \\"
+  echo "    TZ=Asia/Shanghai \\"
+  echo "    DINGTALK_CLIENT_ID=<id> DINGTALK_CLIENT_SECRET=<secret> \\"
+  echo "    DINGTALK_ROBOT_CODE=<code> DINGTALK_CORP_ID=<corp_id> \\"
+  echo "    bash"
+  echo ""
+  echo "必填参数（12 个）："
+  echo "  GHCR_TOKEN              GitHub PAT（read:packages 权限）"
+  echo "  WORKER_ID               全局唯一 Worker 标识"
+  echo "  MODEL_PROVIDER          模型提供商（如 custom）"
+  echo "  MODEL_ID                模型标识（如 MiniMax-M2.5）"
+  echo "  MODEL_NAME              模型显示名称（如 MiniMax）"
+  echo "  MODEL_API_KEY           模型 API Key"
+  echo "  MODEL_BASE_URL          模型 API 地址"
+  echo "  TZ                      时区（如 Asia/Shanghai）"
+  echo "  DINGTALK_CLIENT_ID      钉钉应用 Client ID"
+  echo "  DINGTALK_CLIENT_SECRET  钉钉应用 Client Secret"
+  echo "  DINGTALK_ROBOT_CODE     钉钉机器人 Code"
+  echo "  DINGTALK_CORP_ID        钉钉企业 Corp ID"
+  echo ""
+  echo "可选参数："
+  echo "  MODEL_CONTEXT_WINDOW    上下文窗口大小（默认 204800）"
+  echo "  MODEL_MAX_TOKENS        最大输出 token（默认 196608）"
+  echo "  DATA_DIR                持久化数据目录（默认 /data/openworker）"
+  echo "  CLEAN=1                 清理数据目录后重新部署"
+  echo "  SKILL_WHITELIST         Skill 白名单，逗号分隔"
+  echo "  BROWSER_CDP_URL         远程浏览器 CDP 地址"
+  echo "  SEARXNG_URL             SearXNG 搜索引擎地址"
+  echo "  OPENCLAW_GATEWAY_TOKEN  Gateway 认证 Token"
+  exit 1
+fi
+
+CONTAINER_NAME="openworker-bot-${WORKER_ID}"
+
+echo "=== OpenWorker Bot 部署 ==="
+echo "  Worker ID：$WORKER_ID"
+echo "  容器名：$CONTAINER_NAME"
+echo "  模型：$MODEL_ID ($MODEL_NAME)"
+echo "  数据目录：$DATA_DIR/$WORKER_ID"
+echo ""
+
+# ── 2. 检查 Docker ───────────────────────────────────
+if ! command -v docker &>/dev/null; then
+  echo "Docker 未安装，正在安装..."
+  curl -fsSL https://get.docker.com | sh
+  systemctl enable --now docker
+  echo "Docker 安装完成。"
+elif ! docker info &>/dev/null; then
+  echo "Docker 未运行，正在启动..."
+  systemctl start docker
+fi
+
+# ── 3. 登录 GHCR ─────────────────────────────────────
+echo "登录 GHCR..."
+echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
+
+# ── 4. 判断新建 or 升级 ──────────────────────────────
+EXISTING=$(docker ps -a --filter "label=openworker.worker-id=$WORKER_ID" --format '{{.Names}}' | head -1)
+PORT=""
+
+if [ -n "$EXISTING" ]; then
+  echo "检测到已有容器：$EXISTING（升级模式）"
+
+  # Read port from existing container
+  PORT=$(docker inspect "$EXISTING" --format '{{(index (index .NetworkSettings.Ports "18790/tcp") 0).HostPort}}' 2>/dev/null || true)
+  [ -z "$PORT" ] && PORT="18790"
+  echo "  保留端口：$PORT"
+fi
+
+# ── 5. 拉取最新镜像 ──────────────────────────────────
+echo "拉取最新镜像..."
+docker pull "$IMAGE"
+
+# ── 6. CLEAN 模式 ────────────────────────────────────
+if [ "${CLEAN:-}" = "1" ]; then
+  echo "CLEAN 模式：清理数据目录 $DATA_DIR/$WORKER_ID"
+  rm -rf "${DATA_DIR:?}/${WORKER_ID:?}"
+fi
+
+# ── 7. 停止旧容器（升级模式）─────────────────────────
+if [ -n "$EXISTING" ]; then
+  echo "停止并删除旧容器..."
+  docker stop "$EXISTING" 2>/dev/null || true
+  docker rm "$EXISTING" 2>/dev/null || true
+fi
+
+# ── 8. 新建模式：分配端口 + 创建数据目录 ─────────────
+if [ -z "$PORT" ]; then
+  # Auto-assign port starting from 18790
+  USED_PORTS=$(docker ps -a --filter "label=openworker.worker-id" --format '{{.Ports}}' | grep -oE '0\.0\.0\.0:[0-9]+' | cut -d: -f2 | sort -n)
+  PORT=18790
+  while echo "$USED_PORTS" | grep -q "^${PORT}$"; do
+    PORT=$((PORT + 1))
+  done
+  echo "  分配端口：$PORT"
+fi
+
+mkdir -p "$DATA_DIR/$WORKER_ID"
+chown 1000:1000 "$DATA_DIR/$WORKER_ID"
+
+# ── 9. 构建 docker run 参数 ──────────────────────────
+IMAGE_SHA=$(docker inspect --format '{{.Id}}' "$IMAGE" | cut -c8-19)
+
+RUN_ARGS=(
+  -d
+  --name "$CONTAINER_NAME"
+  --restart unless-stopped
+  --label "openworker.worker-id=$WORKER_ID"
+  --label "openworker.managed-by=openworker-bot-install"
+  --label "openworker.version=$IMAGE_SHA"
+  -p "${PORT}:18790"
+  -v "$DATA_DIR/$WORKER_ID:/home/node/.openclaw"
+  -e "WORKER_ID=$WORKER_ID"
+  -e "TZ=$TZ"
+  -e "MODEL_PROVIDER=$MODEL_PROVIDER"
+  -e "MODEL_ID=$MODEL_ID"
+  -e "MODEL_NAME=$MODEL_NAME"
+  -e "MODEL_API_KEY=$MODEL_API_KEY"
+  -e "MODEL_BASE_URL=$MODEL_BASE_URL"
+  -e "MODEL_CONTEXT_WINDOW=$MODEL_CONTEXT_WINDOW"
+  -e "MODEL_MAX_TOKENS=$MODEL_MAX_TOKENS"
+  -e "DINGTALK_CLIENT_ID=$DINGTALK_CLIENT_ID"
+  -e "DINGTALK_CLIENT_SECRET=$DINGTALK_CLIENT_SECRET"
+  -e "DINGTALK_ROBOT_CODE=$DINGTALK_ROBOT_CODE"
+  -e "DINGTALK_CORP_ID=$DINGTALK_CORP_ID"
+)
+
+# Optional env vars (only pass if set)
+[ -n "${SKILL_WHITELIST:-}" ]         && RUN_ARGS+=(-e "SKILL_WHITELIST=$SKILL_WHITELIST")
+[ -n "${BROWSER_CDP_URL:-}" ]         && RUN_ARGS+=(-e "BROWSER_CDP_URL=$BROWSER_CDP_URL")
+[ -n "${SEARXNG_URL:-}" ]             && RUN_ARGS+=(-e "SEARXNG_URL=$SEARXNG_URL")
+[ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]  && RUN_ARGS+=(-e "OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN")
+[ -n "${DINGTALK_CARD_TEMPLATE_ID:-}" ] && RUN_ARGS+=(-e "DINGTALK_CARD_TEMPLATE_ID=$DINGTALK_CARD_TEMPLATE_ID")
+
+# ── 10. 启动容器 ─────────────────────────────────────
+echo "启动容器..."
+docker run "${RUN_ARGS[@]}" "$IMAGE"
+
+# ── 11. 等待 gateway 就绪 ────────────────────────────
+echo ""
+echo "等待 gateway 就绪..."
+TIMEOUT=60
+ELAPSED=0
+READY=false
+
+while [ $ELAPSED -lt $TIMEOUT ]; do
+  if docker logs "$CONTAINER_NAME" 2>&1 | grep -q "Gateway.*listening\|Gateway.*started\|listening on.*18789"; then
+    READY=true
+    break
+  fi
+
+  # Check if container is still running
+  if ! docker ps --filter "name=$CONTAINER_NAME" --filter "status=running" -q | grep -q .; then
+    echo ""
+    echo "=== 部署失败 ==="
+    echo "容器已退出，日志："
+    docker logs "$CONTAINER_NAME" 2>&1 | tail -30
+    exit 1
+  fi
+
+  sleep 2
+  ELAPSED=$((ELAPSED + 2))
+  printf "."
+done
+echo ""
+
+# ── 12. 验证结果 ─────────────────────────────────────
+if $READY; then
+  echo "=== 部署成功 ==="
+  echo ""
+  echo "  容器名：$CONTAINER_NAME"
+  echo "  端口：$PORT"
+  echo "  数据目录：$DATA_DIR/$WORKER_ID"
+  echo "  镜像版本：$IMAGE_SHA"
+  echo ""
+  echo "常用命令："
+  echo "  查看日志：docker logs -f $CONTAINER_NAME"
+  echo "  停止容器：docker stop $CONTAINER_NAME"
+  echo "  卸载：docker stop $CONTAINER_NAME && docker rm $CONTAINER_NAME"
+  echo "  清除数据：rm -rf $DATA_DIR/$WORKER_ID"
+else
+  echo "=== 部署超时 ==="
+  echo "Gateway 未在 ${TIMEOUT} 秒内就绪，但容器仍在运行。"
+  echo "请手动检查日志：docker logs -f $CONTAINER_NAME"
+  echo ""
+  echo "最近日志："
+  docker logs "$CONTAINER_NAME" 2>&1 | tail -20
+  exit 1
+fi

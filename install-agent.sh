@@ -23,15 +23,32 @@ if [ -z "${HOST_ID:-}" ] || [ -z "${HOST_KEY:-}" ] || [ -z "${SERVER_URL:-}" ]; 
   exit 1
 fi
 
-# ── 检查 Docker ───────────────────────────────────────
+# ── 检查并安装 Docker ─────────────────────────────────
 if ! command -v docker &>/dev/null; then
-  echo "错误：未安装 Docker"
-  exit 1
+  echo "未检测到 Docker，正在自动安装..."
+  if command -v apt-get &>/dev/null; then
+    apt-get update -y && apt-get install -y docker.io
+  elif command -v yum &>/dev/null; then
+    yum install -y docker
+  elif command -v dnf &>/dev/null; then
+    dnf install -y docker
+  else
+    echo "错误：无法自动安装 Docker，请手动安装后重试"
+    exit 1
+  fi
+  systemctl enable docker
+  systemctl start docker
+  echo "Docker 安装完成"
 fi
 
 if ! docker info &>/dev/null; then
-  echo "错误：Docker daemon 未运行"
-  exit 1
+  echo "Docker daemon 未运行，正在启动..."
+  systemctl start docker
+  sleep 2
+  if ! docker info &>/dev/null; then
+    echo "错误：Docker daemon 启动失败"
+    exit 1
+  fi
 fi
 
 echo "=== OpenWorker Agent 部署 ==="

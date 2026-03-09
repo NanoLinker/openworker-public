@@ -8,14 +8,14 @@ OPENCLAW_DATA_DIR="${OPENCLAW_DATA_DIR:-/data/openworker}"
 REPORT_INTERVAL="${REPORT_INTERVAL:-60000}"
 
 # ── 检查参数 ──────────────────────────────────────────
-if [ -z "${DEPLOY_ID:-}" ] || [ -z "${AGENT_KEY:-}" ] || [ -z "${SERVER_URL:-}" ]; then
+if [ -z "${HOST_ID:-}" ] || [ -z "${HOST_KEY:-}" ] || [ -z "${SERVER_URL:-}" ]; then
   echo "用法："
-  echo "  curl -sSL <url>/install.sh | SERVER_URL=http://x.x.x.x:3000 DEPLOY_ID=<id> AGENT_KEY=<key> bash"
+  echo "  curl -sSL <url>/install.sh | SERVER_URL=http://x.x.x.x:3000 HOST_ID=<id> HOST_KEY=<key> bash"
   echo ""
   echo "必填参数："
   echo "  SERVER_URL  管理端地址"
-  echo "  DEPLOY_ID   Server 分配的部署 ID"
-  echo "  AGENT_KEY   Agent 认证密钥（ow_ 前缀）"
+  echo "  HOST_ID   Server 分配的主机 ID"
+  echo "  HOST_KEY   Host 认证密钥（hk_ 前缀）"
   echo ""
   echo "可选参数："
   echo "  OPENCLAW_DATA_DIR  OpenClaw 数据目录（默认 /data/openworker）"
@@ -37,7 +37,7 @@ fi
 echo "=== OpenWorker Agent 部署 ==="
 echo "  镜像：$IMAGE"
 echo "  Server：$SERVER_URL"
-echo "  Deploy ID：$DEPLOY_ID"
+echo "  Host ID：$HOST_ID"
 echo "  数据目录：$OPENCLAW_DATA_DIR"
 echo ""
 
@@ -62,8 +62,8 @@ docker run -d \
   -v /sys:/host/sys:ro \
   -v "${OPENCLAW_DATA_DIR}:${OPENCLAW_DATA_DIR}:ro" \
   -e SERVER_URL="$SERVER_URL" \
-  -e DEPLOY_ID="$DEPLOY_ID" \
-  -e AGENT_KEY="$AGENT_KEY" \
+  -e HOST_ID="$HOST_ID" \
+  -e HOST_KEY="$HOST_KEY" \
   -e REPORT_INTERVAL="$REPORT_INTERVAL" \
   -e OPENCLAW_DATA_DIR="$OPENCLAW_DATA_DIR" \
   "$IMAGE"

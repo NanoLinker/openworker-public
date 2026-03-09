@@ -101,7 +101,7 @@ docker logs -f openworker-bot-<WORKER_ID>
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/install-agent.sh | \
-  SERVER_URL=http://your-server:3000 DEPLOY_ID=<id> AGENT_KEY=<key> bash
+  SERVER_URL=http://your-server:3000 HOST_ID=<id> HOST_KEY=<key> bash
 ```
 
 ### 参数说明
@@ -109,8 +109,8 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/in
 | 参数 | 必填 | 说明 |
 |------|------|------|
 | `SERVER_URL` | 是 | 管理端地址 |
-| `DEPLOY_ID` | 是 | 部署 ID（管理端分配） |
-| `AGENT_KEY` | 是 | Agent 认证密钥（`ow_` 前缀） |
+| `HOST_ID` | 是 | 主机 ID（管理端分配） |
+| `HOST_KEY` | 是 | Host 认证密钥（`hk_` 前缀） |
 | `OPENCLAW_DATA_DIR` | 否 | OpenClaw 数据目录（默认 `/data/openworker`） |
 | `REPORT_INTERVAL` | 否 | 上报间隔毫秒（默认 `60000`） |
 

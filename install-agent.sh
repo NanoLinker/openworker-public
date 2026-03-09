@@ -69,7 +69,7 @@ fi
 # 清除可能干扰的 credential 配置（避免交互式登录提示）
 docker logout 2>/dev/null || true
 mkdir -p ~/.docker
-echo '{}' > ~/.docker/config.json
+echo '{"credsStore":""}' > ~/.docker/config.json
 echo "拉取最新镜像..."
 docker pull "$IMAGE"
 

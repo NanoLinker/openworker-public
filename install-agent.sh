@@ -65,11 +65,12 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   docker rm "$CONTAINER_NAME" 2>/dev/null || true
 fi
 
-# ── 拉取最新镜像 ──────────────────────────────────────
-# 清除可能干扰的 credential 配置（避免交互式登录提示）
-docker logout 2>/dev/null || true
-mkdir -p ~/.docker
-echo '{"credsStore":""}' > ~/.docker/config.json
+# ── 登录 GHCR & 拉取镜像 ─────────────────────────────
+if [ -n "${GHCR_TOKEN:-}" ]; then
+  echo "登录 GHCR..."
+  echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
+fi
+
 echo "拉取最新镜像..."
 docker pull "$IMAGE"
 

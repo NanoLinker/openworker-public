@@ -8,14 +8,17 @@ OPENCLAW_DATA_DIR="${OPENCLAW_DATA_DIR:-/data/openworker}"
 REPORT_INTERVAL="${REPORT_INTERVAL:-60000}"
 
 # ── 检查参数 ──────────────────────────────────────────
-if [ -z "${HOST_ID:-}" ] || [ -z "${HOST_KEY:-}" ] || [ -z "${SERVER_URL:-}" ]; then
+if [ -z "${GHCR_TOKEN:-}" ] || [ -z "${HOST_ID:-}" ] || [ -z "${HOST_KEY:-}" ] || [ -z "${SERVER_URL:-}" ]; then
   echo "用法："
-  echo "  curl -sSL <url>/install.sh | SERVER_URL=http://x.x.x.x:3000 HOST_ID=<id> HOST_KEY=<key> bash"
+  echo "  curl -sSL <url>/install-agent.sh | \\"
+  echo "    GHCR_TOKEN=ghp_xxx \\"
+  echo "    SERVER_URL=http://x.x.x.x:3000 HOST_ID=<id> HOST_KEY=<key> bash"
   echo ""
   echo "必填参数："
+  echo "  GHCR_TOKEN  GitHub PAT（read:packages 权限）"
   echo "  SERVER_URL  管理端地址"
-  echo "  HOST_ID   Server 分配的主机 ID"
-  echo "  HOST_KEY   Host 认证密钥（hk_ 前缀）"
+  echo "  HOST_ID     Server 分配的主机 ID"
+  echo "  HOST_KEY    Host 认证密钥（hk_ 前缀）"
   echo ""
   echo "可选参数："
   echo "  OPENCLAW_DATA_DIR  OpenClaw 数据目录（默认 /data/openworker）"
@@ -65,12 +68,11 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   docker rm "$CONTAINER_NAME" 2>/dev/null || true
 fi
 
-# ── 登录 GHCR & 拉取镜像 ─────────────────────────────
-if [ -n "${GHCR_TOKEN:-}" ]; then
-  echo "登录 GHCR..."
-  echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
-fi
+# ── 登录 GHCR ────────────────────────────────────────
+echo "登录 GHCR..."
+echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
 
+# ── 拉取最新镜像 ──────────────────────────────────────
 echo "拉取最新镜像..."
 docker pull "$IMAGE"
 

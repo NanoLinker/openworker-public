@@ -66,10 +66,10 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 fi
 
 # ── 拉取最新镜像 ──────────────────────────────────────
-# 清除可能干扰的 Docker Hub 凭证配置（避免交互式登录提示）
-if [ -f ~/.docker/config.json ]; then
-  sed -i 's/"credsStore"[^,}]*[,]\?//' ~/.docker/config.json 2>/dev/null || true
-fi
+# 清除可能干扰的 credential 配置（避免交互式登录提示）
+docker logout 2>/dev/null || true
+mkdir -p ~/.docker
+echo '{}' > ~/.docker/config.json
 echo "拉取最新镜像..."
 docker pull "$IMAGE"
 

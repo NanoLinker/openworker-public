@@ -4,7 +4,9 @@ set -euo pipefail
 # ============================================================
 # OpenWorker Bot One-Click Deploy Script
 #
-# Usage:
+# Supports DingTalk, Feishu, or both channels.
+#
+# Usage (DingTalk):
 #   curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
 #     GHCR_TOKEN=ghp_xxx \
 #     WORKER_ID=ow-abc123 \
@@ -13,6 +15,16 @@ set -euo pipefail
 #     TZ=Asia/Shanghai \
 #     DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
 #     DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
+#     bash
+#
+# Usage (Feishu):
+#   curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+#     GHCR_TOKEN=ghp_xxx \
+#     WORKER_ID=ow-abc123 \
+#     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
+#     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+#     TZ=Asia/Shanghai \
+#     FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
 #     bash
 #
 # Re-run the same command to upgrade (pull new image + update env + keep data).
@@ -32,7 +44,6 @@ REQUIRED_VARS=(
   WORKER_ID
   MODEL_PROVIDER MODEL_ID MODEL_NAME MODEL_API_KEY MODEL_BASE_URL
   TZ
-  DINGTALK_CLIENT_ID DINGTALK_CLIENT_SECRET DINGTALK_ROBOT_CODE DINGTALK_CORP_ID
 )
 
 missing=()
@@ -40,10 +51,27 @@ for var in "${REQUIRED_VARS[@]}"; do
   [ -z "${!var:-}" ] && missing+=("$var")
 done
 
+# Channel check: at least one channel must be configured
+HAS_DINGTALK=false
+HAS_FEISHU=false
+
+if [ -n "${DINGTALK_CLIENT_ID:-}" ] && [ -n "${DINGTALK_CLIENT_SECRET:-}" ] && \
+   [ -n "${DINGTALK_ROBOT_CODE:-}" ] && [ -n "${DINGTALK_CORP_ID:-}" ]; then
+  HAS_DINGTALK=true
+fi
+
+if [ -n "${FEISHU_APP_ID:-}" ] && [ -n "${FEISHU_APP_SECRET:-}" ]; then
+  HAS_FEISHU=true
+fi
+
+if [ "$HAS_DINGTALK" = false ] && [ "$HAS_FEISHU" = false ]; then
+  missing+=("CHANNEL(至少配置一个渠道: 钉钉或飞书)")
+fi
+
 if [ ${#missing[@]} -gt 0 ]; then
   echo "缺少必填参数：${missing[*]}"
   echo ""
-  echo "用法："
+  echo "用法（钉钉）："
   echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
   echo "    GHCR_TOKEN=ghp_xxx \\"
   echo "    WORKER_ID=<id> \\"
@@ -54,7 +82,17 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "    DINGTALK_ROBOT_CODE=<code> DINGTALK_CORP_ID=<corp_id> \\"
   echo "    bash"
   echo ""
-  echo "必填参数（12 个）："
+  echo "用法（飞书）："
+  echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
+  echo "    GHCR_TOKEN=ghp_xxx \\"
+  echo "    WORKER_ID=<id> \\"
+  echo "    MODEL_PROVIDER=custom MODEL_ID=<model> MODEL_NAME=<name> \\"
+  echo "    MODEL_API_KEY=<key> MODEL_BASE_URL=<url> \\"
+  echo "    TZ=Asia/Shanghai \\"
+  echo "    FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=<secret> \\"
+  echo "    bash"
+  echo ""
+  echo "必填参数（8 个）："
   echo "  GHCR_TOKEN              GitHub PAT（read:packages 权限）"
   echo "  WORKER_ID               全局唯一 Worker 标识"
   echo "  MODEL_PROVIDER          模型提供商（如 custom）"
@@ -63,10 +101,16 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  MODEL_API_KEY           模型 API Key"
   echo "  MODEL_BASE_URL          模型 API 地址"
   echo "  TZ                      时区（如 Asia/Shanghai）"
-  echo "  DINGTALK_CLIENT_ID      钉钉应用 Client ID"
-  echo "  DINGTALK_CLIENT_SECRET  钉钉应用 Client Secret"
-  echo "  DINGTALK_ROBOT_CODE     钉钉机器人 Code"
-  echo "  DINGTALK_CORP_ID        钉钉企业 Corp ID"
+  echo ""
+  echo "渠道参数（至少配置一组）："
+  echo "  钉钉:"
+  echo "    DINGTALK_CLIENT_ID      钉钉应用 Client ID"
+  echo "    DINGTALK_CLIENT_SECRET  钉钉应用 Client Secret"
+  echo "    DINGTALK_ROBOT_CODE     钉钉机器人 Code"
+  echo "    DINGTALK_CORP_ID        钉钉企业 Corp ID"
+  echo "  飞书:"
+  echo "    FEISHU_APP_ID           飞书应用 App ID"
+  echo "    FEISHU_APP_SECRET       飞书应用 App Secret"
   echo ""
   echo "可选参数："
   echo "  MODEL_CONTEXT_WINDOW    上下文窗口大小（默认 204800）"
@@ -82,10 +126,16 @@ fi
 
 CONTAINER_NAME="openworker-bot-${WORKER_ID}"
 
+# Build channel display string
+CHANNELS=""
+[ "$HAS_DINGTALK" = true ] && CHANNELS="钉钉"
+[ "$HAS_FEISHU" = true ] && CHANNELS="${CHANNELS:+$CHANNELS + }飞书"
+
 echo "=== OpenWorker Bot 部署 ==="
 echo "  Worker ID：$WORKER_ID"
 echo "  容器名：$CONTAINER_NAME"
 echo "  模型：$MODEL_ID ($MODEL_NAME)"
+echo "  渠道：$CHANNELS"
 echo "  数据目录：$DATA_DIR/$WORKER_ID"
 echo ""
 
@@ -169,18 +219,32 @@ RUN_ARGS=(
   -e "MODEL_BASE_URL=$MODEL_BASE_URL"
   -e "MODEL_CONTEXT_WINDOW=$MODEL_CONTEXT_WINDOW"
   -e "MODEL_MAX_TOKENS=$MODEL_MAX_TOKENS"
-  -e "DINGTALK_CLIENT_ID=$DINGTALK_CLIENT_ID"
-  -e "DINGTALK_CLIENT_SECRET=$DINGTALK_CLIENT_SECRET"
-  -e "DINGTALK_ROBOT_CODE=$DINGTALK_ROBOT_CODE"
-  -e "DINGTALK_CORP_ID=$DINGTALK_CORP_ID"
 )
+
+# DingTalk channel (only pass if fully configured)
+if [ "$HAS_DINGTALK" = true ]; then
+  RUN_ARGS+=(
+    -e "DINGTALK_CLIENT_ID=$DINGTALK_CLIENT_ID"
+    -e "DINGTALK_CLIENT_SECRET=$DINGTALK_CLIENT_SECRET"
+    -e "DINGTALK_ROBOT_CODE=$DINGTALK_ROBOT_CODE"
+    -e "DINGTALK_CORP_ID=$DINGTALK_CORP_ID"
+  )
+  [ -n "${DINGTALK_CARD_TEMPLATE_ID:-}" ] && RUN_ARGS+=(-e "DINGTALK_CARD_TEMPLATE_ID=$DINGTALK_CARD_TEMPLATE_ID")
+fi
+
+# Feishu channel (only pass if fully configured)
+if [ "$HAS_FEISHU" = true ]; then
+  RUN_ARGS+=(
+    -e "FEISHU_APP_ID=$FEISHU_APP_ID"
+    -e "FEISHU_APP_SECRET=$FEISHU_APP_SECRET"
+  )
+fi
 
 # Optional env vars (only pass if set)
 [ -n "${SKILL_WHITELIST:-}" ]         && RUN_ARGS+=(-e "SKILL_WHITELIST=$SKILL_WHITELIST")
 [ -n "${BROWSER_CDP_URL:-}" ]         && RUN_ARGS+=(-e "BROWSER_CDP_URL=$BROWSER_CDP_URL")
 [ -n "${SEARXNG_URL:-}" ]             && RUN_ARGS+=(-e "SEARXNG_URL=$SEARXNG_URL")
 [ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]  && RUN_ARGS+=(-e "OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN")
-[ -n "${DINGTALK_CARD_TEMPLATE_ID:-}" ] && RUN_ARGS+=(-e "DINGTALK_CARD_TEMPLATE_ID=$DINGTALK_CARD_TEMPLATE_ID")
 
 # ── 10. 启动容器 ─────────────────────────────────────
 echo "启动容器..."
@@ -220,6 +284,7 @@ if $READY; then
   echo ""
   echo "  容器名：$CONTAINER_NAME"
   echo "  端口：$PORT"
+  echo "  渠道：$CHANNELS"
   echo "  数据目录：$DATA_DIR/$WORKER_ID"
   echo "  镜像版本：$IMAGE_SHA"
   echo ""

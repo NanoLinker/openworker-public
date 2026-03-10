@@ -4,7 +4,9 @@ OpenWorker 公开部署脚本。
 
 ## Bot 一键部署
 
-在目标服务器上执行一行命令，即可部署一个 OpenWorker Bot（Worker 容器）：
+在目标服务器上执行一行命令，即可部署一个 OpenWorker Bot（Worker 容器）。支持钉钉、飞书或同时接入两个渠道。
+
+### 钉钉部署
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
@@ -15,6 +17,34 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
   TZ=Asia/Shanghai \
   DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
   DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
+  bash
+```
+
+### 飞书部署
+
+```bash
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+  GHCR_TOKEN=ghp_xxx \
+  WORKER_ID=1 \
+  MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
+  MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+  TZ=Asia/Shanghai \
+  FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
+  bash
+```
+
+### 双渠道部署（钉钉 + 飞书）
+
+```bash
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+  GHCR_TOKEN=ghp_xxx \
+  WORKER_ID=1 \
+  MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
+  MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+  TZ=Asia/Shanghai \
+  DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
+  DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
+  FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
   bash
 ```
 
@@ -32,10 +62,24 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 | `MODEL_API_KEY` | 模型 API Key |
 | `MODEL_BASE_URL` | 模型 API 地址 |
 | `TZ` | 时区（如 `Asia/Shanghai`） |
+
+### 渠道参数（至少配置一组）
+
+**钉钉：**
+
+| 参数 | 说明 |
+|------|------|
 | `DINGTALK_CLIENT_ID` | 钉钉应用 Client ID |
 | `DINGTALK_CLIENT_SECRET` | 钉钉应用 Client Secret |
 | `DINGTALK_ROBOT_CODE` | 钉钉机器人 Code |
 | `DINGTALK_CORP_ID` | 钉钉企业 Corp ID |
+
+**飞书：**
+
+| 参数 | 说明 |
+|------|------|
+| `FEISHU_APP_ID` | 飞书应用 App ID（`cli_` 前缀） |
+| `FEISHU_APP_SECRET` | 飞书应用 App Secret |
 
 ### 可选参数
 
@@ -49,6 +93,7 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 | `BROWSER_CDP_URL` | - | 远程浏览器 CDP 地址 |
 | `SEARXNG_URL` | - | SearXNG 搜索引擎地址 |
 | `OPENCLAW_GATEWAY_TOKEN` | - | Gateway 认证 Token |
+| `DINGTALK_CARD_TEMPLATE_ID` | - | 钉钉 AI 卡片模板 ID |
 
 ### 前置条件
 
@@ -58,7 +103,7 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 ### 脚本执行流程
 
 ```
-1. 检查必填参数（12 个全检，缺一则报错退出）
+1. 检查必填参数（8 个基础 + 至少一组渠道参数）
 2. 检查 Docker（未安装则自动安装，未运行则启动）
 3. 登录 GHCR
 4. 判断新建 or 升级（通过 Docker label 识别已有容器）

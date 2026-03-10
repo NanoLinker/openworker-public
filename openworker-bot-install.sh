@@ -140,16 +140,26 @@ echo "  数据目录：$DATA_DIR/$WORKER_ID"
 echo ""
 
 # ── 2. 检查 Docker ───────────────────────────────────
-if ! command -v docker &>/dev/null; then
-  echo "Docker 未安装，正在安装..."
-  curl -fsSL https://get.docker.com | sh
-  systemctl enable --now docker
-  echo "Docker 安装完成。"
-elif ! docker info &>/dev/null; then
-  echo "Docker 未运行，正在启动..."
-  systemctl start docker
-fi
+IS_LINUX=false
+[ "$(uname -s)" = "Linux" ] && IS_LINUX=true
 
+if ! command -v docker &>/dev/null; then
+  if $IS_LINUX; then
+    echo "Docker 未安装，正在安装..."
+    curl -fsSL https://get.docker.com | sh
+    systemctl enable --now docker
+    echo "Docker 安装完成。"
+  else
+    die "Docker 未安装。macOS 请先安装 Docker Desktop：brew install --cask docker"
+  fi
+elif ! docker info &>/dev/null; then
+  if $IS_LINUX; then
+    echo "Docker 未运行，正在启动..."
+    systemctl start docker
+  else
+    die "Docker 未运行。请先启动 Docker Desktop。"
+  fi
+fi
 # ── 3. 登录 GHCR ─────────────────────────────────────
 echo "登录 GHCR..."
 echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
@@ -196,7 +206,10 @@ if [ -z "$PORT" ]; then
 fi
 
 mkdir -p "$DATA_DIR/$WORKER_ID"
-chown 1000:1000 "$DATA_DIR/$WORKER_ID"
+# chown: only needed on Linux (Docker Desktop on macOS handles permissions via VirtioFS)
+if $IS_LINUX; then
+  chown 1000:1000 "$DATA_DIR/$WORKER_ID"
+fi
 
 # ── 9. 构建 docker run 参数 ──────────────────────────
 IMAGE_SHA=$(docker inspect --format '{{.Id}}' "$IMAGE" | cut -c8-19)

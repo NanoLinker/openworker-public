@@ -5,19 +5,9 @@ set -euo pipefail
 # OpenWorker Bot One-Click Deploy Script
 #
 # Supports DingTalk, Feishu, or both channels.
+# Supports two image sources: GHCR (international) or Aliyun OSS (China).
 #
-# Usage (DingTalk):
-#   curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
-#     GHCR_TOKEN=ghp_xxx \
-#     WORKER_ID=ow-abc123 \
-#     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
-#     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
-#     TZ=Asia/Shanghai \
-#     DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
-#     DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
-#     bash
-#
-# Usage (Feishu):
+# Usage (GHCR + Feishu):
 #   curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
 #     GHCR_TOKEN=ghp_xxx \
 #     WORKER_ID=ow-abc123 \
@@ -25,6 +15,17 @@ set -euo pipefail
 #     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
 #     TZ=Asia/Shanghai \
 #     FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
+#     bash
+#
+# Usage (OSS + DingTalk, faster in China):
+#   curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+#     OSS_ACCESS_KEY_ID=LTAI5xxx OSS_ACCESS_KEY_SECRET=xxx \
+#     WORKER_ID=ow-abc123 \
+#     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
+#     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+#     TZ=Asia/Shanghai \
+#     DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
+#     DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
 #     bash
 #
 # Re-run the same command to upgrade (pull new image + update env + keep data).
@@ -35,12 +36,26 @@ DATA_DIR="${DATA_DIR:-/data/openworker}"
 MODEL_CONTEXT_WINDOW="${MODEL_CONTEXT_WINDOW:-204800}"
 MODEL_MAX_TOKENS="${MODEL_MAX_TOKENS:-196608}"
 
+# OSS defaults
+OSS_BUCKET="${OSS_BUCKET:-openworker}"
+OSS_ENDPOINT="${OSS_ENDPOINT:-oss-cn-hangzhou.aliyuncs.com}"
+
 # ── Helper ────────────────────────────────────────────
 die() { echo "错误：$1" >&2; exit 1; }
 
-# ── 1. 检查必填参数 ───────────────────────────────────
+# ── 1. 检查镜像来源 ──────────────────────────────────
+HAS_OSS=false
+HAS_GHCR=false
+
+if [ -n "${OSS_ACCESS_KEY_ID:-}" ] && [ -n "${OSS_ACCESS_KEY_SECRET:-}" ]; then
+  HAS_OSS=true
+fi
+if [ -n "${GHCR_TOKEN:-}" ]; then
+  HAS_GHCR=true
+fi
+
+# ── 2. 检查必填参数 ───────────────────────────────────
 REQUIRED_VARS=(
-  GHCR_TOKEN
   WORKER_ID
   MODEL_PROVIDER MODEL_ID MODEL_NAME MODEL_API_KEY MODEL_BASE_URL
   TZ
@@ -50,6 +65,11 @@ missing=()
 for var in "${REQUIRED_VARS[@]}"; do
   [ -z "${!var:-}" ] && missing+=("$var")
 done
+
+# Image source check
+if [ "$HAS_OSS" = false ] && [ "$HAS_GHCR" = false ]; then
+  missing+=("IMAGE_SOURCE(需要 GHCR_TOKEN 或 OSS_ACCESS_KEY_ID+OSS_ACCESS_KEY_SECRET)")
+fi
 
 # Channel check: at least one channel must be configured
 HAS_DINGTALK=false
@@ -71,18 +91,7 @@ fi
 if [ ${#missing[@]} -gt 0 ]; then
   echo "缺少必填参数：${missing[*]}"
   echo ""
-  echo "用法（钉钉）："
-  echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
-  echo "    GHCR_TOKEN=ghp_xxx \\"
-  echo "    WORKER_ID=<id> \\"
-  echo "    MODEL_PROVIDER=custom MODEL_ID=<model> MODEL_NAME=<name> \\"
-  echo "    MODEL_API_KEY=<key> MODEL_BASE_URL=<url> \\"
-  echo "    TZ=Asia/Shanghai \\"
-  echo "    DINGTALK_CLIENT_ID=<id> DINGTALK_CLIENT_SECRET=<secret> \\"
-  echo "    DINGTALK_ROBOT_CODE=<code> DINGTALK_CORP_ID=<corp_id> \\"
-  echo "    bash"
-  echo ""
-  echo "用法（飞书）："
+  echo "用法（GHCR + 飞书）："
   echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
   echo "    GHCR_TOKEN=ghp_xxx \\"
   echo "    WORKER_ID=<id> \\"
@@ -92,8 +101,18 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "    FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=<secret> \\"
   echo "    bash"
   echo ""
-  echo "必填参数（8 个）："
-  echo "  GHCR_TOKEN              GitHub PAT（read:packages 权限）"
+  echo "用法（OSS + 钉钉，国内更快）："
+  echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
+  echo "    OSS_ACCESS_KEY_ID=<id> OSS_ACCESS_KEY_SECRET=<secret> \\"
+  echo "    WORKER_ID=<id> \\"
+  echo "    MODEL_PROVIDER=custom MODEL_ID=<model> MODEL_NAME=<name> \\"
+  echo "    MODEL_API_KEY=<key> MODEL_BASE_URL=<url> \\"
+  echo "    TZ=Asia/Shanghai \\"
+  echo "    DINGTALK_CLIENT_ID=<id> DINGTALK_CLIENT_SECRET=<secret> \\"
+  echo "    DINGTALK_ROBOT_CODE=<code> DINGTALK_CORP_ID=<corp_id> \\"
+  echo "    bash"
+  echo ""
+  echo "必填参数（7 个）："
   echo "  WORKER_ID               全局唯一 Worker 标识"
   echo "  MODEL_PROVIDER          模型提供商（如 custom）"
   echo "  MODEL_ID                模型标识（如 MiniMax-M2.5）"
@@ -101,6 +120,13 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  MODEL_API_KEY           模型 API Key"
   echo "  MODEL_BASE_URL          模型 API 地址"
   echo "  TZ                      时区（如 Asia/Shanghai）"
+  echo ""
+  echo "镜像来源（二选一）："
+  echo "  GHCR（国际）:"
+  echo "    GHCR_TOKEN              GitHub PAT（read:packages 权限）"
+  echo "  阿里云 OSS（国内更快）:"
+  echo "    OSS_ACCESS_KEY_ID       阿里云 AccessKey ID"
+  echo "    OSS_ACCESS_KEY_SECRET   阿里云 AccessKey Secret"
   echo ""
   echo "渠道参数（至少配置一组）："
   echo "  钉钉:"
@@ -116,6 +142,8 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  MODEL_CONTEXT_WINDOW    上下文窗口大小（默认 204800）"
   echo "  MODEL_MAX_TOKENS        最大输出 token（默认 196608）"
   echo "  DATA_DIR                持久化数据目录（默认 /data/openworker）"
+  echo "  OSS_BUCKET              OSS Bucket 名称（默认 openworker）"
+  echo "  OSS_ENDPOINT            OSS Endpoint（默认 oss-cn-hangzhou.aliyuncs.com）"
   echo "  CLEAN=1                 清理数据目录后重新部署"
   echo "  SKILL_WHITELIST         Skill 白名单，逗号分隔"
   echo "  BROWSER_CDP_URL         远程浏览器 CDP 地址"
@@ -125,6 +153,13 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 CONTAINER_NAME="openworker-bot-${WORKER_ID}"
+
+# Determine image source display
+if [ "$HAS_OSS" = true ]; then
+  IMAGE_SOURCE_DISPLAY="阿里云 OSS ($OSS_ENDPOINT)"
+else
+  IMAGE_SOURCE_DISPLAY="GHCR (ghcr.io)"
+fi
 
 # Build channel display string
 CHANNELS=""
@@ -136,10 +171,11 @@ echo "  Worker ID：$WORKER_ID"
 echo "  容器名：$CONTAINER_NAME"
 echo "  模型：$MODEL_ID ($MODEL_NAME)"
 echo "  渠道：$CHANNELS"
+echo "  镜像来源：$IMAGE_SOURCE_DISPLAY"
 echo "  数据目录：$DATA_DIR/$WORKER_ID"
 echo ""
 
-# ── 2. 检查 Docker ───────────────────────────────────
+# ── 3. 检查 Docker ───────────────────────────────────
 IS_LINUX=false
 [ "$(uname -s)" = "Linux" ] && IS_LINUX=true
 
@@ -160,9 +196,6 @@ elif ! docker info &>/dev/null; then
     die "Docker 未运行。请先启动 Docker Desktop。"
   fi
 fi
-# ── 3. 登录 GHCR ─────────────────────────────────────
-echo "登录 GHCR..."
-echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
 
 # ── 4. 判断新建 or 升级 ──────────────────────────────
 EXISTING=$(docker ps -a --filter "label=openworker.worker-id=$WORKER_ID" --format '{{.Names}}' | head -1)
@@ -177,9 +210,68 @@ if [ -n "$EXISTING" ]; then
   echo "  保留端口：$PORT"
 fi
 
-# ── 5. 拉取最新镜像 ──────────────────────────────────
-echo "拉取最新镜像..."
-docker pull "$IMAGE"
+# ── 5. 获取镜像 ──────────────────────────────────────
+if [ "$HAS_OSS" = true ]; then
+  # ── 5a. 从阿里云 OSS 下载镜像 ──────────────────────
+  ARCH=$(uname -m)
+  case "$ARCH" in
+    x86_64)  ARCH_NAME="amd64" ;;
+    aarch64) ARCH_NAME="arm64" ;;
+    arm64)   ARCH_NAME="arm64" ;;
+    *)       die "不支持的架构：$ARCH" ;;
+  esac
+
+  OSS_OBJECT="docker/openworker-${ARCH_NAME}-latest.tar.gz"
+  OSS_URL="https://${OSS_BUCKET}.${OSS_ENDPOINT}/${OSS_OBJECT}"
+  TMP_FILE="/tmp/openworker-${ARCH_NAME}-latest.tar.gz"
+
+  echo "从 OSS 下载镜像（${ARCH_NAME}）..."
+  echo "  $OSS_URL"
+
+  # Download using ossutil if available, otherwise use curl with signed URL
+  if command -v ossutil &>/dev/null || command -v ossutil64 &>/dev/null; then
+    OSSUTIL_CMD=$(command -v ossutil || command -v ossutil64)
+    $OSSUTIL_CMD cp "oss://${OSS_BUCKET}/${OSS_OBJECT}" "$TMP_FILE" \
+      -e "$OSS_ENDPOINT" \
+      -i "$OSS_ACCESS_KEY_ID" \
+      -k "$OSS_ACCESS_KEY_SECRET" \
+      --force
+  else
+    # Install ossutil
+    echo "安装 ossutil..."
+    OSSUTIL_ARCH="$ARCH_NAME"
+    [ "$OSSUTIL_ARCH" = "arm64" ] && OSSUTIL_ARCH="arm64"
+    curl -sSL "https://gosspublic.alicdn.com/ossutil/v2-beta/2.0.3-beta.09171400/ossutil-2.0.3-beta.09171400-linux-${OSSUTIL_ARCH}.zip" -o /tmp/ossutil.zip
+    unzip -qo /tmp/ossutil.zip -d /tmp/ossutil-install
+    OSSUTIL_CMD=$(find /tmp/ossutil-install -name 'ossutil*' -type f | head -1)
+    chmod +x "$OSSUTIL_CMD"
+
+    $OSSUTIL_CMD cp "oss://${OSS_BUCKET}/${OSS_OBJECT}" "$TMP_FILE" \
+      -e "$OSS_ENDPOINT" \
+      -i "$OSS_ACCESS_KEY_ID" \
+      -k "$OSS_ACCESS_KEY_SECRET" \
+      --force
+  fi
+
+  echo "加载镜像到 Docker..."
+  docker load < "$TMP_FILE"
+  rm -f "$TMP_FILE"
+
+  # Tag as expected image name for consistency
+  LOADED_IMAGE=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'nanolinker/openworker' | head -1)
+  if [ -n "$LOADED_IMAGE" ] && [ "$LOADED_IMAGE" != "$IMAGE" ]; then
+    docker tag "$LOADED_IMAGE" "$IMAGE"
+  fi
+
+  echo "OSS 镜像加载完成。"
+else
+  # ── 5b. 从 GHCR 拉取镜像 ───────────────────────────
+  echo "登录 GHCR..."
+  echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
+
+  echo "拉取最新镜像..."
+  docker pull "$IMAGE"
+fi
 
 # ── 6. CLEAN 模式 ────────────────────────────────────
 if [ "${CLEAN:-}" = "1" ]; then
@@ -298,6 +390,7 @@ if $READY; then
   echo "  容器名：$CONTAINER_NAME"
   echo "  端口：$PORT"
   echo "  渠道：$CHANNELS"
+  echo "  镜像来源：$IMAGE_SOURCE_DISPLAY"
   echo "  数据目录：$DATA_DIR/$WORKER_ID"
   echo "  镜像版本：$IMAGE_SHA"
 

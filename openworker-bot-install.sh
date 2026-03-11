@@ -300,9 +300,62 @@ if $READY; then
   echo "  渠道：$CHANNELS"
   echo "  数据目录：$DATA_DIR/$WORKER_ID"
   echo "  镜像版本：$IMAGE_SHA"
+
+  # ── 12a. 外置加载详情 ──────────────────────────────
+  echo ""
+  echo "外置加载情况："
+
+  # Skills
+  SKILL_SUMMARY=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External skills:" | tail -1)
+  if [ -n "$SKILL_SUMMARY" ]; then
+    echo "  $SKILL_SUMMARY"
+    docker logs "$CONTAINER_NAME" 2>&1 | grep -E '^\s*\[OK\]|^\s*\[FAIL\]' | while read -r line; do
+      echo "    $line"
+    done
+  else
+    echo "  Skills: 无外置 Skill"
+  fi
+
+  # Profile
+  PROFILE_LINE=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External profiles:" | tail -1)
+  if [ -n "$PROFILE_LINE" ]; then
+    echo "  $PROFILE_LINE"
+  else
+    echo "  Profile: 使用默认"
+  fi
+
+  # Config override
+  CONFIG_LINE=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External config override applied" | tail -1)
+  if [ -n "$CONFIG_LINE" ]; then
+    echo "  Config override: applied"
+  else
+    echo "  Config override: 无"
+  fi
+
+  # SOUL.md preview
+  SOUL_PREVIEW=$(docker exec "$CONTAINER_NAME" head -3 /home/node/.openclaw/workspace/SOUL.md 2>/dev/null)
+  if [ -n "$SOUL_PREVIEW" ]; then
+    echo ""
+    echo "Bot 人格预览："
+    echo "$SOUL_PREVIEW" | while read -r line; do
+      echo "  $line"
+    done
+  fi
+
+  # Hint if no external files
+  if [ -z "$SKILL_SUMMARY" ] && [ -z "$PROFILE_LINE" ] && [ -z "$CONFIG_LINE" ]; then
+    echo ""
+    echo "提示：将自定义文件放到以下目录，然后 docker restart $CONTAINER_NAME 即可生效："
+    echo "  Skills:  $DATA_DIR/$WORKER_ID/openworker-skills/"
+    echo "  Profile: $DATA_DIR/$WORKER_ID/openworker-profiles/main/"
+    echo "  Config:  $DATA_DIR/$WORKER_ID/openworker-config/"
+  fi
+
   echo ""
   echo "常用命令："
   echo "  查看日志：docker logs -f $CONTAINER_NAME"
+  echo "  重启：docker restart $CONTAINER_NAME"
+  echo "  进入容器：docker exec -it $CONTAINER_NAME bash"
   echo "  停止容器：docker stop $CONTAINER_NAME"
   echo "  卸载：docker stop $CONTAINER_NAME && docker rm $CONTAINER_NAME"
   echo "  清除数据：rm -rf $DATA_DIR/$WORKER_ID"

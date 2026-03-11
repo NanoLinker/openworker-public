@@ -155,7 +155,7 @@ CONTAINER_NAME="openworker-bot-${WORKER_ID}"
 
 # Determine image source display
 if [ "$HAS_OSS" = true ]; then
-  IMAGE_SOURCE_DISPLAY="阿里云 OSS ($OSS_ENDPOINT)"
+  IMAGE_SOURCE_DISPLAY="阿里云 OSS (${OSS_ENDPOINT:-auto-detect})"
 else
   IMAGE_SOURCE_DISPLAY="GHCR (ghcr.io)"
 fi

@@ -415,7 +415,7 @@ if $READY; then
     echo "  $SKILL_SUMMARY"
     docker logs "$CONTAINER_NAME" 2>&1 | grep -E '^\s*\[OK\]|^\s*\[FAIL\]' | while read -r line; do
       echo "    $line"
-    done
+    done || true
   else
     echo "  Skills: 无外置 Skill"
   fi

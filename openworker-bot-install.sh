@@ -265,23 +265,39 @@ if [ "$HAS_OSS" = true ]; then
   fi
 
   echo "加载镜像到 Docker..."
-  docker load < "$TMP_FILE"
+  LOAD_OUTPUT=$(docker load < "$TMP_FILE" 2>&1)
+  echo "$LOAD_OUTPUT"
   rm -f "$TMP_FILE"
 
-  # Tag as expected image name for consistency
-  LOADED_IMAGE=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'nanolinker/openworker' | head -1)
-  if [ -n "$LOADED_IMAGE" ] && [ "$LOADED_IMAGE" != "$IMAGE" ]; then
-    docker tag "$LOADED_IMAGE" "$IMAGE"
+  # Parse loaded image name from docker load output
+  # Output format: "Loaded image: ghcr.io/nanolinker/openworker:sha-xxx-linux-amd64"
+  LOADED_IMAGE=$(echo "$LOAD_OUTPUT" | sed -n 's/.*Loaded image: //p' | head -1)
+  if [ -z "$LOADED_IMAGE" ]; then
+    # Fallback: search docker images
+    LOADED_IMAGE=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'nanolinker/openworker' | head -1)
+  fi
+
+  if [ -n "$LOADED_IMAGE" ]; then
+    echo "  加载的镜像：$LOADED_IMAGE"
+    if [ "$LOADED_IMAGE" != "$IMAGE" ]; then
+      echo "  标记为：$IMAGE"
+      docker tag "$LOADED_IMAGE" "$IMAGE"
+    fi
+  else
+    die "docker load 未能识别镜像名称"
   fi
 
   echo "OSS 镜像加载完成。"
+  docker images "$IMAGE" --format "  镜像 ID: {{.ID}}  大小: {{.Size}}  创建: {{.CreatedSince}}"
 else
   # ── 5b. 从 GHCR 拉取镜像 ───────────────────────────
   echo "登录 GHCR..."
   echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
 
-  echo "拉取最新镜像..."
+  echo "拉取最新镜像：$IMAGE"
   docker pull "$IMAGE"
+  echo "GHCR 镜像拉取完成。"
+  docker images "$IMAGE" --format "  镜像 ID: {{.ID}}  大小: {{.Size}}  创建: {{.CreatedSince}}"
 fi
 
 # ── 6. CLEAN 模式 ────────────────────────────────────

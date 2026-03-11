@@ -38,7 +38,6 @@ MODEL_MAX_TOKENS="${MODEL_MAX_TOKENS:-196608}"
 
 # OSS defaults
 OSS_BUCKET="${OSS_BUCKET:-openworker}"
-OSS_ENDPOINT="${OSS_ENDPOINT:-oss-cn-hangzhou.aliyuncs.com}"
 
 # ── Helper ────────────────────────────────────────────
 die() { echo "错误：$1" >&2; exit 1; }
@@ -143,7 +142,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  MODEL_MAX_TOKENS        最大输出 token（默认 196608）"
   echo "  DATA_DIR                持久化数据目录（默认 /data/openworker）"
   echo "  OSS_BUCKET              OSS Bucket 名称（默认 openworker）"
-  echo "  OSS_ENDPOINT            OSS Endpoint（默认 oss-cn-hangzhou.aliyuncs.com）"
+  echo "  OSS_ENDPOINT            OSS Endpoint（自动检测内外网，一般不需要填）"
   echo "  CLEAN=1                 清理数据目录后重新部署"
   echo "  SKILL_WHITELIST         Skill 白名单，逗号分隔"
   echo "  BROWSER_CDP_URL         远程浏览器 CDP 地址"
@@ -220,6 +219,18 @@ if [ "$HAS_OSS" = true ]; then
     arm64)   ARCH_NAME="arm64" ;;
     *)       die "不支持的架构：$ARCH" ;;
   esac
+
+  # Auto-detect OSS endpoint: try internal first (Aliyun VPC), fallback to public
+  if [ -z "${OSS_ENDPOINT:-}" ]; then
+    OSS_INTERNAL="oss-cn-hangzhou-internal.aliyuncs.com"
+    if curl -s --connect-timeout 2 "https://${OSS_BUCKET}.${OSS_INTERNAL}" -o /dev/null 2>/dev/null; then
+      OSS_ENDPOINT="$OSS_INTERNAL"
+      echo "  检测到阿里云内网，使用内网 Endpoint"
+    else
+      OSS_ENDPOINT="oss-cn-hangzhou.aliyuncs.com"
+      echo "  使用公网 Endpoint"
+    fi
+  fi
 
   OSS_OBJECT="docker/openworker-${ARCH_NAME}-latest.tar.gz"
   OSS_URL="https://${OSS_BUCKET}.${OSS_ENDPOINT}/${OSS_OBJECT}"

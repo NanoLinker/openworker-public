@@ -410,7 +410,7 @@ if $READY; then
   echo "外置加载情况："
 
   # Skills
-  SKILL_SUMMARY=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External skills:" | tail -1)
+  SKILL_SUMMARY=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External skills:" | tail -1 || true)
   if [ -n "$SKILL_SUMMARY" ]; then
     echo "  $SKILL_SUMMARY"
     docker logs "$CONTAINER_NAME" 2>&1 | grep -E '^\s*\[OK\]|^\s*\[FAIL\]' | while read -r line; do
@@ -421,7 +421,7 @@ if $READY; then
   fi
 
   # Profile
-  PROFILE_LINE=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External profiles:" | tail -1)
+  PROFILE_LINE=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External profiles:" | tail -1 || true)
   if [ -n "$PROFILE_LINE" ]; then
     echo "  $PROFILE_LINE"
   else
@@ -429,7 +429,7 @@ if $READY; then
   fi
 
   # Config override
-  CONFIG_LINE=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External config override applied" | tail -1)
+  CONFIG_LINE=$(docker logs "$CONTAINER_NAME" 2>&1 | grep "External config override applied" | tail -1 || true)
   if [ -n "$CONFIG_LINE" ]; then
     echo "  Config override: applied"
   else
@@ -437,13 +437,13 @@ if $READY; then
   fi
 
   # SOUL.md preview
-  SOUL_PREVIEW=$(docker exec "$CONTAINER_NAME" head -3 /home/node/.openclaw/workspace/SOUL.md 2>/dev/null)
+  SOUL_PREVIEW=$(docker exec "$CONTAINER_NAME" head -3 /home/node/.openclaw/workspace/SOUL.md 2>/dev/null || true)
   if [ -n "$SOUL_PREVIEW" ]; then
     echo ""
     echo "Bot 人格预览："
     echo "$SOUL_PREVIEW" | while read -r line; do
       echo "  $line"
-    done
+    done || true
   fi
 
   # Hint if no external files

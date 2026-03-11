@@ -4,23 +4,9 @@ OpenWorker 公开部署脚本。
 
 ## Bot 一键部署
 
-在目标服务器上执行一行命令，即可部署一个 OpenWorker Bot（Worker 容器）。支持钉钉、飞书或同时接入两个渠道。
+在目标服务器上执行一行命令，即可部署一个 OpenWorker Bot（Worker 容器）。支持钉钉、飞书或同时接入两个渠道。支持 GHCR（国际）和阿里云 OSS（国内更快）两种镜像来源。
 
-### 钉钉部署
-
-```bash
-curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
-  GHCR_TOKEN=ghp_xxx \
-  WORKER_ID=1 \
-  MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
-  MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
-  TZ=Asia/Shanghai \
-  DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
-  DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
-  bash
-```
-
-### 飞书部署
+### GHCR + 飞书
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
@@ -33,11 +19,25 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
   bash
 ```
 
-### 双渠道部署（钉钉 + 飞书）
+### OSS + 钉钉（国内更快）
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
-  GHCR_TOKEN=ghp_xxx \
+  OSS_ACCESS_KEY_ID=LTAI5xxx OSS_ACCESS_KEY_SECRET=xxx \
+  WORKER_ID=1 \
+  MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
+  MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+  TZ=Asia/Shanghai \
+  DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
+  DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \
+  bash
+```
+
+### OSS + 双渠道（钉钉 + 飞书）
+
+```bash
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+  OSS_ACCESS_KEY_ID=LTAI5xxx OSS_ACCESS_KEY_SECRET=xxx \
   WORKER_ID=1 \
   MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
   MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
@@ -50,11 +50,19 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 
 重复执行同一命令 = 升级（拉新镜像 + 更新环境变量 + 保留数据）。
 
+### 镜像来源（二选一）
+
+| 方式 | 参数 | 说明 |
+|------|------|------|
+| **GHCR** | `GHCR_TOKEN` | GitHub PAT（需 `read:packages` 权限），国际网络 |
+| **阿里云 OSS** | `OSS_ACCESS_KEY_ID` + `OSS_ACCESS_KEY_SECRET` | 国内服务器推荐，自动检测内外网 |
+
+OSS 方式会自动检测服务器架构（amd64/arm64）和网络环境（阿里云内网/公网），无需手动配置。
+
 ### 必填参数
 
 | 参数 | 说明 |
 |------|------|
-| `GHCR_TOKEN` | GitHub PAT（需 `read:packages` 权限） |
 | `WORKER_ID` | 全局唯一 Worker 标识 |
 | `MODEL_PROVIDER` | 模型提供商（如 `custom`） |
 | `MODEL_ID` | 模型标识（如 `MiniMax-M2.5`） |
@@ -88,6 +96,8 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 | `MODEL_CONTEXT_WINDOW` | `204800` | 上下文窗口大小 |
 | `MODEL_MAX_TOKENS` | `196608` | 最大输出 token |
 | `DATA_DIR` | `/data/openworker` | 持久化数据目录 |
+| `OSS_BUCKET` | `openworker` | OSS Bucket 名称 |
+| `OSS_ENDPOINT` | 自动检测 | OSS Endpoint（一般不需要填） |
 | `CLEAN` | - | 设为 `1` 清理数据目录后重新部署 |
 | `SKILL_WHITELIST` | - | Skill 白名单，逗号分隔 |
 | `BROWSER_CDP_URL` | - | 远程浏览器 CDP 地址 |
@@ -97,35 +107,69 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 
 ### 前置条件
 
-- 服务器能访问 `ghcr.io`（拉取镜像）
 - 如未安装 Docker，脚本会自动安装
+- GHCR 方式需要服务器能访问 `ghcr.io`
+- OSS 方式需要阿里云 AccessKey（只需 OSS 读权限）
+
+### 部署后输出
+
+脚本部署完成后会自动显示：
+
+- 外置 Skill 加载状态（名称 + [OK]/[FAIL]）
+- Profile 加载状态
+- 配置覆盖状态
+- Bot 人格预览（SOUL.md 前 3 行）
+- 如无外置文件，提示文件放置路径
+
+### 自定义 Skill / Profile
+
+部署完成后，将自定义文件放到数据目录：
+
+```
+$DATA_DIR/$WORKER_ID/
+├── openworker-skills/        # 自定义 Skill
+│   └── my-skill/
+│       └── SKILL.md
+├── openworker-profiles/      # 自定义 Profile
+│   └── main/
+│       └── SOUL.md
+└── openworker-config/        # 配置覆盖
+    └── openclaw.json
+```
+
+然后 `docker restart openworker-bot-<WORKER_ID>` 即可生效。
+
+详细开发教程见 [openworker-bot-dev-starter](https://github.com/NanoLinker/openworker-bot-dev-starter)。
 
 ### 脚本执行流程
 
 ```
-1. 检查必填参数（8 个基础 + 至少一组渠道参数）
+1. 检查必填参数（7 个基础 + 镜像来源 + 至少一组渠道参数）
 2. 检查 Docker（未安装则自动安装，未运行则启动）
-3. 登录 GHCR
+3. 获取镜像：
+   - OSS 方式：自动检测架构和网络 → 下载 tar.gz → docker load
+   - GHCR 方式：登录 GHCR → docker pull
 4. 判断新建 or 升级（通过 Docker label 识别已有容器）
-5. 拉取最新镜像
-6. 如果升级：读取旧端口 → 停旧容器 → 用新参数重建
-7. 如果新建：自动分配端口 → 创建数据目录
-8. 启动容器
-9. 等待 gateway 就绪（最多 60 秒）
-10. 输出部署结果
+5. 如果升级：读取旧端口 → 停旧容器 → 用新参数重建
+6. 如果新建：自动分配端口 → 创建数据目录
+7. 启动容器
+8. 等待 gateway 就绪（最多 60 秒）
+9. 输出部署结果 + 外置加载详情
 ```
 
 ### 升级
 
 重新执行同一命令即可。脚本会自动拉取最新镜像、保留数据目录和端口、用新参数重建容器。
 
-### 卸载
+### 常用命令
 
-```bash
-docker stop openworker-bot-<WORKER_ID> && docker rm openworker-bot-<WORKER_ID>
-# 如需清除数据：
-rm -rf /data/openworker/<WORKER_ID>
-```
+| 操作 | 命令 |
+|------|------|
+| 查看日志 | `docker logs -f openworker-bot-<WORKER_ID>` |
+| 重启 | `docker restart openworker-bot-<WORKER_ID>` |
+| 进入容器 | `docker exec -it openworker-bot-<WORKER_ID> bash` |
+| 卸载 | `docker stop openworker-bot-<WORKER_ID> && docker rm openworker-bot-<WORKER_ID>` |
+| 清除数据 | `rm -rf /data/openworker/<WORKER_ID>` |
 
 ### 排查问题
 

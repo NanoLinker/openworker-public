@@ -252,7 +252,7 @@ if [ "$HAS_OSS" = true ]; then
     echo "安装 ossutil..."
     OSSUTIL_ARCH="$ARCH_NAME"
     [ "$OSSUTIL_ARCH" = "arm64" ] && OSSUTIL_ARCH="arm64"
-    curl -sSL "https://gosspublic.alicdn.com/ossutil/v2-beta/2.0.3-beta.09171400/ossutil-2.0.3-beta.09171400-linux-${OSSUTIL_ARCH}.zip" -o /tmp/ossutil.zip
+    curl -sSL "https://gosspublic.alicdn.com/ossutil/v2/2.2.1/ossutil-2.2.1-linux-${OSSUTIL_ARCH}.zip" -o /tmp/ossutil.zip
     unzip -qo /tmp/ossutil.zip -d /tmp/ossutil-install
     OSSUTIL_CMD=$(find /tmp/ossutil-install -name 'ossutil*' -type f | head -1)
     chmod +x "$OSSUTIL_CMD"

@@ -320,10 +320,10 @@ if [ -z "$PORT" ]; then
   echo "  分配端口：$PORT"
 fi
 
-mkdir -p "$DATA_DIR/$WORKER_ID"
+mkdir -p "$DATA_DIR/$WORKER_ID" "$DATA_DIR/$WORKER_ID/openworker-skills" "$DATA_DIR/$WORKER_ID/openworker-profiles" "$DATA_DIR/$WORKER_ID/openworker-config"
 # chown: only needed on Linux (Docker Desktop on macOS handles permissions via VirtioFS)
 if $IS_LINUX; then
-  chown 1000:1000 "$DATA_DIR/$WORKER_ID"
+  chown -R 1000:1000 "$DATA_DIR/$WORKER_ID"
 fi
 
 # ── 9. 构建 docker run 参数 ──────────────────────────

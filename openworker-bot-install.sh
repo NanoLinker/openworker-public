@@ -250,12 +250,8 @@ if [ "$HAS_OSS" = true ]; then
   else
     # Install ossutil
     echo "安装 ossutil..."
-    OSSUTIL_ARCH="$ARCH_NAME"
-    [ "$OSSUTIL_ARCH" = "arm64" ] && OSSUTIL_ARCH="arm64"
-    curl -sSL "https://gosspublic.alicdn.com/ossutil/v2/2.2.1/ossutil-2.2.1-linux-${OSSUTIL_ARCH}.zip" -o /tmp/ossutil.zip
-    unzip -qo /tmp/ossutil.zip -d /tmp/ossutil-install
-    OSSUTIL_CMD=$(find /tmp/ossutil-install -name 'ossutil*' -type f | head -1)
-    chmod +x "$OSSUTIL_CMD"
+    curl -sL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+    OSSUTIL_CMD=$(command -v ossutil || command -v ossutil64)
 
     $OSSUTIL_CMD cp "oss://${OSS_BUCKET}/${OSS_OBJECT}" "$TMP_FILE" \
       -e "$OSS_ENDPOINT" \

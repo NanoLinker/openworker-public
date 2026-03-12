@@ -54,7 +54,7 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/do
 ### 飞书（默认 openworker）
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/install-bot.sh | \
   WORKER_ID=ow-abc123 \
   MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
   MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
@@ -66,7 +66,7 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 ### 钉钉（指定特殊 AI 员工镜像）
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/install-bot.sh | \
   IMAGE_NAME=openworker-alaclaw IMAGE_TAG=2026.3.12.5 \
   WORKER_ID=ow-abc123 \
   MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
@@ -80,7 +80,7 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/op
 ### 双渠道（钉钉 + 飞书）
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/openworker-bot-install.sh | \
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/install-bot.sh | \
   WORKER_ID=ow-abc123 \
   MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
   MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \

@@ -8,7 +8,7 @@ set -euo pipefail
 # Requires local Docker image (pre-loaded via docker load).
 #
 # Usage (飞书，默认 openworker):
-#   curl -sSL <url>/openworker-bot-install.sh | \
+#   curl -sSL <url>/install-bot.sh | \
 #     WORKER_ID=ow-abc123 \
 #     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
 #     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
@@ -17,7 +17,7 @@ set -euo pipefail
 #     bash
 #
 # Usage (钉钉，指定特殊 AI 员工镜像):
-#   curl -sSL <url>/openworker-bot-install.sh | \
+#   curl -sSL <url>/install-bot.sh | \
 #     IMAGE_NAME=openworker-alaclaw IMAGE_TAG=2026.3.12.5 \
 #     WORKER_ID=ow-abc123 \
 #     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
@@ -73,7 +73,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "缺少必填参数：${missing[*]}"
   echo ""
   echo "用法（飞书）："
-  echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
+  echo "  curl -sSL <url>/install-bot.sh | \\"
   echo "    WORKER_ID=<id> \\"
   echo "    MODEL_PROVIDER=custom MODEL_ID=<model> MODEL_NAME=<name> \\"
   echo "    MODEL_API_KEY=<key> MODEL_BASE_URL=<url> \\"
@@ -82,7 +82,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "    bash"
   echo ""
   echo "用法（钉钉）："
-  echo "  curl -sSL <url>/openworker-bot-install.sh | \\"
+  echo "  curl -sSL <url>/install-bot.sh | \\"
   echo "    WORKER_ID=<id> \\"
   echo "    MODEL_PROVIDER=custom MODEL_ID=<model> MODEL_NAME=<name> \\"
   echo "    MODEL_API_KEY=<key> MODEL_BASE_URL=<url> \\"

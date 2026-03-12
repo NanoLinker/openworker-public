@@ -2,11 +2,54 @@
 
 OpenWorker 公开部署脚本。
 
+## 镜像下载
+
+从阿里云 OSS 下载镜像并 `docker load`，自动检测内网/公网、读取最新版本号、跳过已有版本。
+
+### 下载默认镜像（openworker）
+
+```bash
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/download-image.sh | \
+  OSS_ACCESS_KEY_ID=xxx OSS_ACCESS_KEY_SECRET=xxx bash
+```
+
+### 下载特殊 AI 员工镜像
+
+```bash
+curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/download-image.sh | \
+  IMAGE_NAME=openworker-alaclaw \
+  OSS_ACCESS_KEY_ID=xxx OSS_ACCESS_KEY_SECRET=xxx bash
+```
+
+### 参数
+
+| 参数 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `OSS_ACCESS_KEY_ID` | 是 | - | 阿里云 AccessKey ID |
+| `OSS_ACCESS_KEY_SECRET` | 是 | - | 阿里云 AccessKey Secret |
+| `IMAGE_NAME` | 否 | `openworker` | 镜像名称 |
+| `IMAGE_TAG` | 否 | `latest` | 镜像标签，`latest` 自动解析为实际版本号 |
+| `FORCE` | 否 | - | 设为 `1` 强制重新下载 |
+
+### 执行流程
+
+```
+1. 检查 Docker
+2. 安装 ossutil（如未安装）
+3. 自动检测 OSS 内网/公网
+4. 读取 version.txt 获取最新版本号
+5. 对比本地镜像，已有则跳过（FORCE=1 强制下载）
+6. 下载 tar.gz → docker load
+7. 打 tag：IMAGE_NAME:版本号 + IMAGE_NAME:latest
+```
+
+---
+
 ## Bot 一键部署
 
 在目标服务器上执行一行命令，即可部署一个 OpenWorker Bot（Worker 容器）。支持钉钉、飞书或同时接入两个渠道。
 
-> 前提：服务器上已预装 Docker 镜像（通过 `docker load` 加载），脚本不会自动下载镜像。
+> 前提：服务器上已预装 Docker 镜像（通过 `download-image.sh` 或手动 `docker load` 加载）。
 
 ### 飞书（默认 openworker）
 

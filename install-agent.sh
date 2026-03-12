@@ -1,82 +1,90 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="ghcr.io/nanolinker/openworker-agent:latest"
+# ============================================================
+# OpenWorker Agent Deploy Script
+#
+# Requires local Docker image (pre-loaded via download-image.sh).
+#
+# Usage:
+#   curl -sSL <url>/install-agent.sh | \
+#     SERVER_URL=http://x.x.x.x:3000 HOST_ID=<id> HOST_KEY=<key> bash
+#
+# Re-run the same command to upgrade (update env + keep data).
+# ============================================================
+
+IMAGE_NAME="${IMAGE_NAME:-openworker-agent}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 CONTAINER_NAME="openworker-agent"
-SERVER_URL="${SERVER_URL:?请设置 SERVER_URL，例如 SERVER_URL=http://your-server:3000}"
 OPENCLAW_DATA_DIR="${OPENCLAW_DATA_DIR:-/data/openworker}"
 REPORT_INTERVAL="${REPORT_INTERVAL:-60000}"
 
-# ── 检查参数 ──────────────────────────────────────────
-if [ -z "${GHCR_TOKEN:-}" ] || [ -z "${HOST_ID:-}" ] || [ -z "${HOST_KEY:-}" ] || [ -z "${SERVER_URL:-}" ]; then
+# ── Helper ────────────────────────────────────────────
+die() { echo "错误：$1" >&2; exit 1; }
+
+# ── 1. 检查参数 ──────────────────────────────────────
+if [ -z "${SERVER_URL:-}" ] || [ -z "${HOST_ID:-}" ] || [ -z "${HOST_KEY:-}" ]; then
   echo "用法："
   echo "  curl -sSL <url>/install-agent.sh | \\"
-  echo "    GHCR_TOKEN=ghp_xxx \\"
   echo "    SERVER_URL=http://x.x.x.x:3000 HOST_ID=<id> HOST_KEY=<key> bash"
   echo ""
   echo "必填参数："
-  echo "  GHCR_TOKEN  GitHub PAT（read:packages 权限）"
   echo "  SERVER_URL  管理端地址"
   echo "  HOST_ID     Server 分配的主机 ID"
   echo "  HOST_KEY    Host 认证密钥（hk_ 前缀）"
   echo ""
   echo "可选参数："
-  echo "  OPENCLAW_DATA_DIR  OpenClaw 数据目录（默认 /data/openworker）"
-  echo "  REPORT_INTERVAL    上报间隔毫秒（默认 60000）"
+  echo "  IMAGE_NAME        镜像名称（默认 openworker-agent）"
+  echo "  IMAGE_TAG         镜像标签（默认 latest）"
+  echo "  OPENCLAW_DATA_DIR OpenClaw 数据目录（默认 /data/openworker）"
+  echo "  REPORT_INTERVAL   上报间隔毫秒（默认 60000）"
   exit 1
 fi
 
-# ── 检查并安装 Docker ─────────────────────────────────
+# ── 2. 检查 Docker ───────────────────────────────────
+IS_LINUX=false
+[ "$(uname -s)" = "Linux" ] && IS_LINUX=true
+
 if ! command -v docker &>/dev/null; then
-  echo "未检测到 Docker，正在自动安装..."
-  if command -v apt-get &>/dev/null; then
-    apt-get update -y && apt-get install -y docker.io
-  elif command -v yum &>/dev/null; then
-    yum install -y docker
-  elif command -v dnf &>/dev/null; then
-    dnf install -y docker
+  if $IS_LINUX; then
+    echo "Docker 未安装，正在安装..."
+    curl -fsSL https://get.docker.com | sh
+    systemctl enable --now docker
+    echo "Docker 安装完成。"
   else
-    echo "错误：无法自动安装 Docker，请手动安装后重试"
-    exit 1
+    die "Docker 未安装。macOS 请先安装 Docker Desktop：brew install --cask docker"
   fi
-  systemctl enable docker
-  systemctl start docker
-  echo "Docker 安装完成"
+elif ! docker info &>/dev/null; then
+  if $IS_LINUX; then
+    echo "Docker 未运行，正在启动..."
+    systemctl start docker
+  else
+    die "Docker 未运行。请先启动 Docker Desktop。"
+  fi
 fi
 
-if ! docker info &>/dev/null; then
-  echo "Docker daemon 未运行，正在启动..."
-  systemctl start docker
-  sleep 2
-  if ! docker info &>/dev/null; then
-    echo "错误：Docker daemon 启动失败"
-    exit 1
-  fi
+# ── 3. 检查本地镜像 ──────────────────────────────────
+if ! docker image inspect "$IMAGE" &>/dev/null; then
+  die "本地未找到镜像 $IMAGE，请先通过 download-image.sh 下载。"
 fi
 
 echo "=== OpenWorker Agent 部署 ==="
 echo "  镜像：$IMAGE"
+docker images "$IMAGE" --format "  镜像 ID: {{.ID}}  大小: {{.Size}}  创建: {{.CreatedSince}}"
 echo "  Server：$SERVER_URL"
 echo "  Host ID：$HOST_ID"
 echo "  数据目录：$OPENCLAW_DATA_DIR"
 echo ""
 
-# ── 清理旧容器 ────────────────────────────────────────
+# ── 4. 清理旧容器 ────────────────────────────────────
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
   echo "停止并删除旧容器..."
   docker stop "$CONTAINER_NAME" 2>/dev/null || true
   docker rm "$CONTAINER_NAME" 2>/dev/null || true
 fi
 
-# ── 登录 GHCR ────────────────────────────────────────
-echo "登录 GHCR..."
-echo "$GHCR_TOKEN" | docker login ghcr.io -u openworker --password-stdin
-
-# ── 拉取最新镜像 ──────────────────────────────────────
-echo "拉取最新镜像..."
-docker pull "$IMAGE"
-
-# ── 启动容器 ──────────────────────────────────────────
+# ── 5. 启动容器 ──────────────────────────────────────
 echo "启动容器..."
 docker run -d \
   --name "$CONTAINER_NAME" \
@@ -92,7 +100,7 @@ docker run -d \
   -e OPENCLAW_DATA_DIR="$OPENCLAW_DATA_DIR" \
   "$IMAGE"
 
-# ── 验证 ──────────────────────────────────────────────
+# ── 6. 验证 ──────────────────────────────────────────
 echo ""
 echo "等待启动..."
 sleep 3
@@ -101,6 +109,11 @@ if docker ps --filter "name=${CONTAINER_NAME}" --filter "status=running" -q | gr
   echo "=== 部署成功 ==="
   echo ""
   docker logs "$CONTAINER_NAME" 2>&1 | tail -10
+  echo ""
+  echo "常用命令："
+  echo "  查看日志：docker logs -f $CONTAINER_NAME"
+  echo "  重启：docker restart $CONTAINER_NAME"
+  echo "  卸载：docker stop $CONTAINER_NAME && docker rm $CONTAINER_NAME"
 else
   echo "=== 部署失败 ==="
   echo "容器日志："

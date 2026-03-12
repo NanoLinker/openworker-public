@@ -222,6 +222,8 @@ docker logs -f openworker-bot-<WORKER_ID>
 
 在目标服务器上执行：
 
+> 前提：服务器上已预装 Docker 镜像（通过 `download-image.sh` 下载 `openworker-agent`）。
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/install-agent.sh | \
   SERVER_URL=http://your-server:3000 HOST_ID=<id> HOST_KEY=<key> bash
@@ -229,18 +231,20 @@ curl -sSL https://raw.githubusercontent.com/NanoLinker/openworker-public/main/in
 
 ### 参数说明
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `SERVER_URL` | 是 | 管理端地址 |
-| `HOST_ID` | 是 | 主机 ID（管理端分配） |
-| `HOST_KEY` | 是 | Host 认证密钥（`hk_` 前缀） |
-| `OPENCLAW_DATA_DIR` | 否 | OpenClaw 数据目录（默认 `/data/openworker`） |
-| `REPORT_INTERVAL` | 否 | 上报间隔毫秒（默认 `60000`） |
+| 参数 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `SERVER_URL` | 是 | - | 管理端地址 |
+| `HOST_ID` | 是 | - | 主机 ID（管理端分配） |
+| `HOST_KEY` | 是 | - | Host 认证密钥（`hk_` 前缀） |
+| `IMAGE_NAME` | 否 | `openworker-agent` | 镜像名称 |
+| `IMAGE_TAG` | 否 | `latest` | 镜像标签 |
+| `OPENCLAW_DATA_DIR` | 否 | `/data/openworker` | OpenClaw 数据目录 |
+| `REPORT_INTERVAL` | 否 | `60000` | 上报间隔毫秒 |
 
 ### 前置条件
 
-- 已安装 Docker 且 daemon 正在运行
-- 服务器能访问 `ghcr.io`（拉取镜像）和管理端地址（上报数据）
+- Docker 已安装（未安装脚本会自动安装）
+- 本地已有 `openworker-agent` 镜像
 
 ### 升级
 

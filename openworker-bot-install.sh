@@ -7,7 +7,7 @@ set -euo pipefail
 # Supports DingTalk, Feishu, or both channels.
 # Requires local Docker image (pre-loaded via docker load).
 #
-# Usage (飞书):
+# Usage (飞书，默认 openworker):
 #   curl -sSL <url>/openworker-bot-install.sh | \
 #     WORKER_ID=ow-abc123 \
 #     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
@@ -16,8 +16,9 @@ set -euo pipefail
 #     FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
 #     bash
 #
-# Usage (钉钉):
+# Usage (钉钉，指定特殊 AI 员工镜像):
 #   curl -sSL <url>/openworker-bot-install.sh | \
+#     IMAGE_NAME=openworker-alaclaw IMAGE_TAG=2026.3.12.5 \
 #     WORKER_ID=ow-abc123 \
 #     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
 #     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
@@ -29,7 +30,9 @@ set -euo pipefail
 # Re-run the same command to upgrade (update env + keep data).
 # ============================================================
 
-IMAGE="${IMAGE:-openworker:latest}"
+IMAGE_NAME="${IMAGE_NAME:-openworker}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 DATA_DIR="${DATA_DIR:-/data/openworker}"
 MODEL_CONTEXT_WINDOW="${MODEL_CONTEXT_WINDOW:-204800}"
 MODEL_MAX_TOKENS="${MODEL_MAX_TOKENS:-196608}"
@@ -108,7 +111,8 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "    FEISHU_APP_SECRET       飞书应用 App Secret"
   echo ""
   echo "可选参数："
-  echo "  IMAGE                   Docker 镜像名（默认 openworker:latest）"
+  echo "  IMAGE_NAME              镜像名称（默认 openworker）"
+  echo "  IMAGE_TAG               镜像标签（默认 latest）"
   echo "  MODEL_CONTEXT_WINDOW    上下文窗口大小（默认 204800）"
   echo "  MODEL_MAX_TOKENS        最大输出 token（默认 196608）"
   echo "  DATA_DIR                持久化数据目录（默认 /data/openworker）"
@@ -130,6 +134,7 @@ CHANNELS=""
 echo "=== OpenWorker Bot 部署 ==="
 echo "  Worker ID：$WORKER_ID"
 echo "  容器名：$CONTAINER_NAME"
+echo "  镜像：$IMAGE"
 echo "  模型：$MODEL_ID ($MODEL_NAME)"
 echo "  渠道：$CHANNELS"
 echo "  数据目录：$DATA_DIR/$WORKER_ID"

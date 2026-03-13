@@ -89,7 +89,8 @@ OSS_BASE="oss://${OSS_BUCKET}/docker/${IMAGE_NAME}"
 
 if [ "$IMAGE_TAG" = "latest" ]; then
   echo "读取最新版本号..."
-  REMOTE_VERSION=$($OSSUTIL_CMD cat "${OSS_BASE}/version.txt" "${OSS_OPTS[@]}" 2>/dev/null | head -1 | tr -d '[:space:]')
+  _ver_raw=$($OSSUTIL_CMD cat "${OSS_BASE}/version.txt" "${OSS_OPTS[@]}" 2>/dev/null || true)
+  REMOTE_VERSION=$(echo "$_ver_raw" | head -1 | tr -d '[:space:]')
   if [ -z "$REMOTE_VERSION" ]; then
     die "无法读取版本号：${OSS_BASE}/version.txt"
   fi

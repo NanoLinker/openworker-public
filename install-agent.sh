@@ -98,6 +98,7 @@ docker run -d \
   -e HOST_KEY="$HOST_KEY" \
   -e REPORT_INTERVAL="$REPORT_INTERVAL" \
   -e OPENCLAW_DATA_DIR="$OPENCLAW_DATA_DIR" \
+  -e OPENCLAW_CONTAINER_PATTERN="${OPENCLAW_CONTAINER_PATTERN:-openworker}" \
   "$IMAGE"
 
 # ── 6. 验证 ──────────────────────────────────────────

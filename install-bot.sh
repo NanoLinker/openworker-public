@@ -38,7 +38,7 @@ MODEL_CONTEXT_WINDOW="${MODEL_CONTEXT_WINDOW:-204800}"
 MODEL_MAX_TOKENS="${MODEL_MAX_TOKENS:-196608}"
 CONTAINER_CPUS="${CONTAINER_CPUS:-0.5}"
 CONTAINER_MEMORY="${CONTAINER_MEMORY:-1200m}"
-
+CONTAINER_MEMORY_SWAP="${CONTAINER_MEMORY_SWAP:-1500m}"
 # ── Helper ────────────────────────────────────────────
 die() { echo "错误：$1" >&2; exit 1; }
 
@@ -126,6 +126,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  BOCHA_API_KEY           Bocha AI Web Search API Key"
   echo "  CONTAINER_CPUS          CPU limit per container (default: 0.5)"
   echo "  CONTAINER_MEMORY        Memory limit per container (default: 1200m)"
+  echo "  CONTAINER_MEMORY_SWAP   Memory+swap limit per container (default: 1500m)"
   exit 1
 fi
 
@@ -248,6 +249,7 @@ RUN_ARGS=(
   --restart unless-stopped
   --cpus "$CONTAINER_CPUS"
   --memory "$CONTAINER_MEMORY"
+  --memory-swap "$CONTAINER_MEMORY_SWAP"
   --label "openworker.worker-id=$WORKER_ID"
   --label "openworker.managed-by=openworker-bot-install"
   --label "openworker.version=$IMAGE_SHA"

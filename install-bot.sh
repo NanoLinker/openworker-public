@@ -36,6 +36,8 @@ IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 DATA_DIR="${DATA_DIR:-/data/openworker}"
 MODEL_CONTEXT_WINDOW="${MODEL_CONTEXT_WINDOW:-204800}"
 MODEL_MAX_TOKENS="${MODEL_MAX_TOKENS:-196608}"
+CONTAINER_CPUS="${CONTAINER_CPUS:-0.5}"
+CONTAINER_MEMORY="${CONTAINER_MEMORY:-1200m}"
 
 # ── Helper ────────────────────────────────────────────
 die() { echo "错误：$1" >&2; exit 1; }
@@ -122,6 +124,8 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  SEARXNG_URL             SearXNG 搜索引擎地址"
   echo "  OPENCLAW_GATEWAY_TOKEN  Gateway 认证 Token"
   echo "  BOCHA_API_KEY           Bocha AI Web Search API Key"
+  echo "  CONTAINER_CPUS          CPU limit per container (default: 0.5)"
+  echo "  CONTAINER_MEMORY        Memory limit per container (default: 1200m)"
   exit 1
 fi
 
@@ -242,6 +246,8 @@ RUN_ARGS=(
   -d
   --name "$CONTAINER_NAME"
   --restart unless-stopped
+  --cpus "$CONTAINER_CPUS"
+  --memory "$CONTAINER_MEMORY"
   --label "openworker.worker-id=$WORKER_ID"
   --label "openworker.managed-by=openworker-bot-install"
   --label "openworker.version=$IMAGE_SHA"

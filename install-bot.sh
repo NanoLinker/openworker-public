@@ -323,6 +323,12 @@ if $READY; then
   echo "  渠道：$CHANNELS"
   echo "  数据目录：$DATA_DIR/$WORKER_ID"
   echo "  镜像版本：$IMAGE_SHA"
+  BASE_VER=$(docker exec "$CONTAINER_NAME" cat /etc/openworker-base-version 2>/dev/null || echo "未知")
+  IMG_VER=$(docker exec "$CONTAINER_NAME" cat /etc/openworker-version 2>/dev/null || echo "未知")
+  IMG_NAME=$(docker exec "$CONTAINER_NAME" cat /etc/openworker-info 2>/dev/null || echo "未知")
+  echo "  基础版本：$BASE_VER"
+  echo "  镜像构建版本：$IMG_VER"
+  echo "  镜像名称：$IMG_NAME"
 
   # ── 11a. 外置加载详情 ──────────────────────────────
   echo ""

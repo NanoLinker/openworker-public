@@ -107,6 +107,8 @@ sleep 3
 
 if docker ps --filter "name=${CONTAINER_NAME}" --filter "status=running" -q | grep -q .; then
   echo "=== 部署成功 ==="
+  AGENT_VER=$(docker exec "$CONTAINER_NAME" cat /etc/openworker-version 2>/dev/null || echo "未知")
+  echo "  Agent 版本：$AGENT_VER"
   echo ""
   docker logs "$CONTAINER_NAME" 2>&1 | tail -10
   echo ""

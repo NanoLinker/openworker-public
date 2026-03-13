@@ -121,6 +121,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  BROWSER_CDP_URL         远程浏览器 CDP 地址"
   echo "  SEARXNG_URL             SearXNG 搜索引擎地址"
   echo "  OPENCLAW_GATEWAY_TOKEN  Gateway 认证 Token"
+  echo "  BOCHA_API_KEY           Bocha AI Web Search API Key"
   exit 1
 fi
 
@@ -281,6 +282,7 @@ fi
 [ -n "${BROWSER_CDP_URL:-}" ]         && RUN_ARGS+=(-e "BROWSER_CDP_URL=$BROWSER_CDP_URL")
 [ -n "${SEARXNG_URL:-}" ]             && RUN_ARGS+=(-e "SEARXNG_URL=$SEARXNG_URL")
 [ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]  && RUN_ARGS+=(-e "OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN")
+[ -n "${BOCHA_API_KEY:-}" ]           && RUN_ARGS+=(-e "BOCHA_API_KEY=$BOCHA_API_KEY")
 
 # ── 9. 启动容器 ─────────────────────────────────────
 echo "启动容器..."

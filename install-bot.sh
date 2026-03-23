@@ -39,6 +39,17 @@ MODEL_MAX_TOKENS="${MODEL_MAX_TOKENS:-196608}"
 CONTAINER_CPUS="${CONTAINER_CPUS:-}"
 CONTAINER_MEMORY="${CONTAINER_MEMORY:-}"
 CONTAINER_MEMORY_SWAP="${CONTAINER_MEMORY_SWAP:-}"
+
+# ── Derive MODEL_* from OPENWORKER_* if available ─────
+# OPENWORKER_URL/KEY are the user-facing vars; MODEL_* are openclaw internals.
+if [ -n "${OPENWORKER_URL:-}" ] && [ -n "${OPENWORKER_KEY:-}" ]; then
+  MODEL_PROVIDER="${MODEL_PROVIDER:-custom}"
+  MODEL_ID="${MODEL_ID:-AUTO}"
+  MODEL_NAME="${MODEL_NAME:-OpenWorker}"
+  MODEL_BASE_URL="${MODEL_BASE_URL:-$OPENWORKER_URL}"
+  MODEL_API_KEY="${MODEL_API_KEY:-$OPENWORKER_KEY}"
+fi
+
 # ── Helper ────────────────────────────────────────────
 die() { echo "错误：$1" >&2; exit 1; }
 
@@ -54,9 +65,10 @@ for var in "${REQUIRED_VARS[@]}"; do
   [ -z "${!var:-}" ] && missing+=("$var")
 done
 
-# Channel check: at least one channel must be configured
+# Channel check: at least one channel must be configured (dingtalk, feishu, or hub)
 HAS_DINGTALK=false
 HAS_FEISHU=false
+HAS_HUB=false
 
 if [ -n "${DINGTALK_CLIENT_ID:-}" ] && [ -n "${DINGTALK_CLIENT_SECRET:-}" ] && \
    [ -n "${DINGTALK_ROBOT_CODE:-}" ] && [ -n "${DINGTALK_CORP_ID:-}" ]; then
@@ -67,8 +79,12 @@ if [ -n "${FEISHU_APP_ID:-}" ] && [ -n "${FEISHU_APP_SECRET:-}" ]; then
   HAS_FEISHU=true
 fi
 
-if [ "$HAS_DINGTALK" = false ] && [ "$HAS_FEISHU" = false ]; then
-  missing+=("CHANNEL(至少配置一个渠道: 钉钉或飞书)")
+if [ -n "${HUB_URL:-}" ]; then
+  HAS_HUB=true
+fi
+
+if [ "$HAS_DINGTALK" = false ] && [ "$HAS_FEISHU" = false ] && [ "$HAS_HUB" = false ]; then
+  missing+=("CHANNEL(至少配置一个渠道: 钉钉、飞书或 Hub)")
 fi
 
 if [ ${#missing[@]} -gt 0 ]; then
@@ -136,6 +152,7 @@ CONTAINER_NAME="openworker-bot-${WORKER_ID}"
 CHANNELS=""
 [ "$HAS_DINGTALK" = true ] && CHANNELS="钉钉"
 [ "$HAS_FEISHU" = true ] && CHANNELS="${CHANNELS:+$CHANNELS + }飞书"
+[ "$HAS_HUB" = true ] && CHANNELS="${CHANNELS:+$CHANNELS + }Hub"
 
 echo "=== OpenWorker Bot 部署 ==="
 echo "  Worker ID：$WORKER_ID"
@@ -264,6 +281,8 @@ RUN_ARGS=(
   -e "MODEL_BASE_URL=$MODEL_BASE_URL"
   -e "MODEL_CONTEXT_WINDOW=$MODEL_CONTEXT_WINDOW"
   -e "MODEL_MAX_TOKENS=$MODEL_MAX_TOKENS"
+  ${OPENWORKER_URL:+-e "OPENWORKER_URL=$OPENWORKER_URL"}
+  ${OPENWORKER_KEY:+-e "OPENWORKER_KEY=$OPENWORKER_KEY"}
 )
 
 # DingTalk channel (only pass if fully configured)
@@ -285,12 +304,18 @@ if [ "$HAS_FEISHU" = true ]; then
   )
 fi
 
+# Hub channel (only pass if configured)
+if [ "$HAS_HUB" = true ]; then
+  RUN_ARGS+=(
+    -e "HUB_URL=$HUB_URL"
+    -e "HUB_MASTER_KEY=${HUB_MASTER_KEY:-}"
+  )
+  [ -n "${HUB_SKILL_MD:-}" ] && RUN_ARGS+=(-e "HUB_SKILL_MD=$HUB_SKILL_MD")
+fi
+
 # Optional env vars (only pass if set)
 [ -n "${SKILL_WHITELIST:-}" ]         && RUN_ARGS+=(-e "SKILL_WHITELIST=$SKILL_WHITELIST")
-[ -n "${BROWSER_CDP_URL:-}" ]         && RUN_ARGS+=(-e "BROWSER_CDP_URL=$BROWSER_CDP_URL")
-[ -n "${SEARXNG_URL:-}" ]             && RUN_ARGS+=(-e "SEARXNG_URL=$SEARXNG_URL")
 [ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]  && RUN_ARGS+=(-e "OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN")
-[ -n "${BOCHA_API_KEY:-}" ]           && RUN_ARGS+=(-e "BOCHA_API_KEY=$BOCHA_API_KEY")
 
 # ── 9. 启动容器 ─────────────────────────────────────
 echo "启动容器..."

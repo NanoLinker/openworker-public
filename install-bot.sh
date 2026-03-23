@@ -4,24 +4,33 @@ set -euo pipefail
 # ============================================================
 # OpenWorker Bot One-Click Deploy Script
 #
-# Supports DingTalk, Feishu, or both channels.
+# Supports Hub, DingTalk, Feishu channels (at least one required).
 # Requires local Docker image (pre-loaded via docker load).
 #
-# Usage (飞书，默认 openworker):
+# Usage (Hub):
 #   curl -sSL <url>/install-bot.sh | \
 #     WORKER_ID=ow-abc123 \
-#     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
-#     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+#     OPENWORKER_URL=https://api.example.com/v1 \
+#     OPENWORKER_KEY=sk-xxx \
+#     TZ=Asia/Shanghai \
+#     HUB_URL=https://hub.example.com \
+#     HUB_MASTER_KEY=xxx \
+#     bash
+#
+# Usage (飞书):
+#   curl -sSL <url>/install-bot.sh | \
+#     WORKER_ID=ow-abc123 \
+#     OPENWORKER_URL=https://api.example.com/v1 \
+#     OPENWORKER_KEY=sk-xxx \
 #     TZ=Asia/Shanghai \
 #     FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
 #     bash
 #
-# Usage (钉钉，指定特殊 AI 员工镜像):
+# Usage (钉钉):
 #   curl -sSL <url>/install-bot.sh | \
-#     IMAGE_NAME=openworker-alaclaw IMAGE_TAG=2026.3.12.5 \
 #     WORKER_ID=ow-abc123 \
-#     MODEL_PROVIDER=custom MODEL_ID=MiniMax-M2.5 MODEL_NAME=MiniMax \
-#     MODEL_API_KEY=sk-xxx MODEL_BASE_URL=https://xxx/v1 \
+#     OPENWORKER_URL=https://api.example.com/v1 \
+#     OPENWORKER_KEY=sk-xxx \
 #     TZ=Asia/Shanghai \
 #     DINGTALK_CLIENT_ID=xxx DINGTALK_CLIENT_SECRET=xxx \
 #     DINGTALK_ROBOT_CODE=xxx DINGTALK_CORP_ID=xxx \

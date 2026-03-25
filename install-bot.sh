@@ -14,7 +14,7 @@ set -euo pipefail
 #     OPENWORKER_KEY=sk-xxx \
 #     TZ=Asia/Shanghai \
 #     HUB_URL=https://hub.example.com \
-#     HUB_MASTER_KEY=xxx \
+#     HUB_SKILL_MD="your skill description" \
 #     bash
 #
 # Usage (飞书):
@@ -104,7 +104,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "    WORKER_ID=<id> \\"
   echo "    OPENWORKER_URL=<url> OPENWORKER_KEY=<key> \\"
   echo "    TZ=Asia/Shanghai \\"
-  echo "    HUB_URL=<hub-url> HUB_MASTER_KEY=<key> \\"
+  echo "    HUB_URL=<hub-url> \\"
   echo "    bash"
   echo ""
   echo "用法（飞书）："
@@ -133,7 +133,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "渠道参数（至少配置一组）："
   echo "  Hub:"
   echo "    HUB_URL                 Hub 地址"
-  echo "    HUB_MASTER_KEY          Hub Master Key"
+  echo "    HUB_SKILL_MD            Worker 技能描述"
   echo "  钉钉:"
   echo "    DINGTALK_CLIENT_ID      钉钉应用 Client ID"
   echo "    DINGTALK_CLIENT_SECRET  钉钉应用 Client Secret"
@@ -321,7 +321,6 @@ fi
 if [ "$HAS_HUB" = true ]; then
   RUN_ARGS+=(
     -e "HUB_URL=$HUB_URL"
-    -e "HUB_MASTER_KEY=${HUB_MASTER_KEY:-}"
   )
   [ -n "${HUB_SKILL_MD:-}" ] && RUN_ARGS+=(-e "HUB_SKILL_MD=$HUB_SKILL_MD")
 fi

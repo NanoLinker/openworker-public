@@ -191,7 +191,7 @@ RUN_ARGS=(
   --label "openworker.version=$IMAGE_SHA"
   --label "openworker.engine=opencode"
   -p "${PORT}:4096"
-  -v "$DATA_DIR/$WORKER_ID:/app/data"
+  -v "$DATA_DIR/$WORKER_ID:/openworker/data"
   -e "WORKER_ID=$WORKER_ID"
   -e "TZ=$TZ"
   -e "OPENWORKER_KEY=$OPENWORKER_KEY"
@@ -213,7 +213,12 @@ ELAPSED=0
 READY=false
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
-  if docker logs "$CONTAINER_NAME" 2>&1 | grep -q "hub-adapter running"; then
+  # Readiness signals emitted by the V2 entrypoint + openworker plugin:
+  #   - "OpenCode ready" — HTTP server accepting requests
+  #   - "WS ... connected" — worker has connected to the Hub
+  #   - "Hub registration complete" — worker is reachable
+  # Any one of these means the container is up enough to dispatch to.
+  if docker logs "$CONTAINER_NAME" 2>&1 | grep -qE "OpenCode ready|WS +. +connected|Hub registration complete"; then
     READY=true
     break
   fi
@@ -243,17 +248,17 @@ if $READY; then
   echo "  数据目录：$DATA_DIR/$WORKER_ID"
   echo "  镜像版本：$IMAGE_SHA"
 
-  IMG_VER=$(docker exec "$CONTAINER_NAME" cat /etc/openworker-version 2>/dev/null || echo "未知")
+  IMG_VER=$(docker exec "$CONTAINER_NAME" cat /openworker/image/manifest.json 2>/dev/null || echo "未知")
   OC_VER=$(docker exec "$CONTAINER_NAME" opencode --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "未知")
   echo "  OpenWorker 版本：$IMG_VER"
   echo "  OpenCode 版本：$OC_VER"
 
-  # AGENTS.md preview
-  AGENTS_PREVIEW=$(docker exec "$CONTAINER_NAME" head -3 /app/data/AGENTS.md 2>/dev/null || true)
-  if [ -n "$AGENTS_PREVIEW" ]; then
+  # SOUL.md preview (user-editable persona supplement in the workspace volume)
+  SOUL_PREVIEW=$(docker exec "$CONTAINER_NAME" head -3 /openworker/data/workspace/SOUL.md 2>/dev/null || true)
+  if [ -n "$SOUL_PREVIEW" ]; then
     echo ""
-    echo "Bot 人格预览："
-    echo "$AGENTS_PREVIEW" | while read -r line; do
+    echo "Bot 人格预览（SOUL.md）："
+    echo "$SOUL_PREVIEW" | while read -r line; do
       echo "  $line"
     done || true
   fi
@@ -268,7 +273,8 @@ if $READY; then
   echo "  清除数据：rm -rf $DATA_DIR/$WORKER_ID"
   echo ""
   echo "监控 API："
-  OC_PASS=$(docker exec "$CONTAINER_NAME" cat /app/data/.opencode-password 2>/dev/null || echo "<见容器内 /app/data/.opencode-password>")
+  # V2 entrypoint hardcodes the server password — no file to read.
+  OC_PASS="openworker-local"
   echo "  Health: curl -u opencode:$OC_PASS http://<host>:$PORT/global/health"
   echo "  Sessions: curl -u opencode:$OC_PASS http://<host>:$PORT/session"
 else

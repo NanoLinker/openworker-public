@@ -72,6 +72,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "  CONTAINER_CPUS          CPU 限制（如 0.5）"
   echo "  CONTAINER_MEMORY        内存限制（如 512m）"
   echo "  CONTAINER_MEMORY_SWAP   内存+Swap 限制"
+  echo "  READY_TIMEOUT           等待容器就绪秒数（默认 180）"
   exit 1
 fi
 
@@ -206,9 +207,13 @@ echo "启动容器..."
 docker run "${RUN_ARGS[@]}" "$IMAGE"
 
 # ── 10. 等待就绪 ─────────────────────────────────────
+# Default 180s — first-time OpenCode boot + Hub WS registration on a slow
+# network often takes 60-120s; 60s timeout was too tight and caused admin
+# to mark deploys as failed even though the container would become ready
+# moments later. Override via READY_TIMEOUT env var.
 echo ""
 echo "等待 OpenCode 就绪..."
-TIMEOUT=60
+TIMEOUT="${READY_TIMEOUT:-180}"
 ELAPSED=0
 READY=false
 

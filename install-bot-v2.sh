@@ -144,8 +144,11 @@ PORT=""
 if [ -n "$EXISTING" ]; then
   echo "检测到已有容器：$EXISTING（升级模式）"
   PORT=$(docker inspect "$EXISTING" --format '{{(index (index .NetworkSettings.Ports "4096/tcp") 0).HostPort}}' 2>/dev/null || true)
-  [ -z "$PORT" ] && PORT="4096"
-  echo "  保留端口：$PORT"
+  if [ -n "$PORT" ]; then
+    echo "  保留端口：$PORT"
+  else
+    echo "  旧容器无端口映射，新容器交给 docker 自动分配"
+  fi
 fi
 
 # ── 5. CLEAN 模式 ────────────────────────────────────
@@ -161,15 +164,9 @@ if [ -n "$EXISTING" ]; then
   docker rm "$EXISTING" 2>/dev/null || true
 fi
 
-# ── 7. 新建模式：分配端口 + 创建数据目录 ─────────────
-if [ -z "$PORT" ]; then
-  USED_PORTS=$(docker ps -a --filter "label=openworker.worker-id" --format '{{.Ports}}' | grep -oE '0\.0\.0\.0:[0-9]+' | cut -d: -f2 | sort -n || true)
-  PORT=4096
-  while echo "$USED_PORTS" | grep -q "^${PORT}$"; do
-    PORT=$((PORT + 1))
-  done
-  echo "  分配端口：$PORT"
-fi
+# ── 7. 创建数据目录 ──────────────────────────────────
+# 端口由 docker daemon 自分配（详见步骤 8 的 -p "4096"），
+# 这样并行部署也不会撞，主机上其他服务占的端口也自动避开。
 
 mkdir -p "$DATA_DIR/$WORKER_ID"
 if $IS_LINUX; then
@@ -178,6 +175,13 @@ fi
 
 # ── 8. 构建 docker run 参数 ──────────────────────────
 IMAGE_SHA=$(docker inspect --format '{{.Id}}' "$IMAGE" | cut -c8-19)
+
+# 升级模式保留旧端口；新建模式让 docker 自分配（避免端口扫描的 race condition）
+if [ -n "$PORT" ]; then
+  PORT_ARG="${PORT}:4096"
+else
+  PORT_ARG="4096"
+fi
 
 RUN_ARGS=(
   -d
@@ -190,7 +194,7 @@ RUN_ARGS=(
   --label "openworker.managed-by=openworker-bot-install-v2"
   --label "openworker.version=$IMAGE_SHA"
   --label "openworker.engine=opencode"
-  -p "${PORT}:4096"
+  -p "$PORT_ARG"
   -v "$DATA_DIR/$WORKER_ID:/openworker/data"
   -e "WORKER_ID=$WORKER_ID"
   -e "TZ=$TZ"
@@ -204,6 +208,12 @@ RUN_ARGS=(
 # ── 9. 启动容器 ─────────────────────────────────────
 echo "启动容器..."
 docker run "${RUN_ARGS[@]}" "$IMAGE"
+
+# 新建模式：从 docker 拿真实分配的 host port
+if [ -z "$PORT" ]; then
+  PORT=$(docker port "$CONTAINER_NAME" 4096/tcp | head -1 | awk -F: '{print $NF}')
+  echo "  分配端口：$PORT（由 docker daemon 自动分配）"
+fi
 
 # ── 10. 等待就绪 ─────────────────────────────────────
 echo ""

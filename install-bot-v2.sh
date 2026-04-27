@@ -240,10 +240,17 @@ fi
 echo ""
 echo "等待 OpenCode 就绪..."
 TIMEOUT="${READY_TIMEOUT:-180}"
-ELAPSED=0
+# Sub-second polling: typical OpenCode cold start emits "OpenCode ready" around
+# 3-5s after `docker run`. Polling every 2s wastes 0-2s of slack on every deploy;
+# 0.5s tightens that to 0-0.5s. The cost (~4× docker logs invocations) is
+# negligible — `docker logs` reads from local files, not the daemon socket.
+POLL_INTERVAL="${READY_POLL_INTERVAL:-0.5}"
+ELAPSED_DECISECONDS=0
+TIMEOUT_DECISECONDS=$((TIMEOUT * 10))
+POLL_DECISECONDS=$(awk "BEGIN{printf \"%d\", $POLL_INTERVAL * 10}")
 READY=false
 
-while [ $ELAPSED -lt $TIMEOUT ]; do
+while [ $ELAPSED_DECISECONDS -lt $TIMEOUT_DECISECONDS ]; do
   # Readiness signals emitted by the V2 entrypoint + openworker plugin:
   #   - "OpenCode ready" — HTTP server accepting requests
   #   - "WS ... connected" — worker has connected to the Hub
@@ -262,9 +269,10 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     exit 1
   fi
 
-  sleep 2
-  ELAPSED=$((ELAPSED + 2))
-  printf "."
+  sleep "$POLL_INTERVAL"
+  ELAPSED_DECISECONDS=$((ELAPSED_DECISECONDS + POLL_DECISECONDS))
+  # One dot per ~2s wall-time so the visual cadence matches the original output.
+  if [ $((ELAPSED_DECISECONDS % 20)) -eq 0 ]; then printf "."; fi
 done
 echo ""
 
@@ -279,19 +287,23 @@ if $READY; then
   echo "  数据目录：$DATA_DIR/$WORKER_ID"
   echo "  镜像版本：$IMAGE_SHA"
 
-  IMG_VER=$(docker exec "$CONTAINER_NAME" cat /openworker/image/manifest.json 2>/dev/null || echo "未知")
-  OC_VER=$(docker exec "$CONTAINER_NAME" opencode --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "未知")
-  echo "  OpenWorker 版本：$IMG_VER"
-  echo "  OpenCode 版本：$OC_VER"
+  # Version + SOUL preview are nice-to-have for interactive deploy but cost ~1s
+  # of docker exec invocations each. Admin-driven mass deploy doesn't read this
+  # output, so skip unless VERBOSE=1 is requested.
+  if [ "${VERBOSE:-0}" = "1" ]; then
+    IMG_VER=$(docker exec "$CONTAINER_NAME" cat /openworker/image/manifest.json 2>/dev/null || echo "未知")
+    OC_VER=$(docker exec "$CONTAINER_NAME" opencode --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "未知")
+    echo "  OpenWorker 版本：$IMG_VER"
+    echo "  OpenCode 版本：$OC_VER"
 
-  # SOUL.md preview (user-editable persona supplement in the workspace volume)
-  SOUL_PREVIEW=$(docker exec "$CONTAINER_NAME" head -3 /openworker/data/workspace/SOUL.md 2>/dev/null || true)
-  if [ -n "$SOUL_PREVIEW" ]; then
-    echo ""
-    echo "Bot 人格预览（SOUL.md）："
-    echo "$SOUL_PREVIEW" | while read -r line; do
-      echo "  $line"
-    done || true
+    SOUL_PREVIEW=$(docker exec "$CONTAINER_NAME" head -3 /openworker/data/workspace/SOUL.md 2>/dev/null || true)
+    if [ -n "$SOUL_PREVIEW" ]; then
+      echo ""
+      echo "Bot 人格预览（SOUL.md）："
+      echo "$SOUL_PREVIEW" | while read -r line; do
+        echo "  $line"
+      done || true
+    fi
   fi
 
   echo ""

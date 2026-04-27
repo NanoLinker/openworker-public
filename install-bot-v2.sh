@@ -163,6 +163,22 @@ if [ -n "$EXISTING" ]; then
   echo "停止并删除旧容器..."
   docker stop "$EXISTING" 2>/dev/null || true
   docker rm "$EXISTING" 2>/dev/null || true
+
+  # docker stop 后 docker-proxy 释放端口可能有延迟，且历史上端口分配 bug 可能让
+  # 多个 worker"声明"过同一端口（旧的端口扫描算法看错时刻）— 升级前 verify 端口
+  # 是否真空闲。被别的进程占 → 放弃 reuse，交给 docker 自动分配新端口。
+  if [ -n "$PORT" ]; then
+    for _ in 1 2 3 4 5; do
+      if ! ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT\b"; then
+        break
+      fi
+      sleep 0.5
+    done
+    if ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT\b"; then
+      echo "  ⚠ 端口 $PORT 仍被其他进程占用，将让 docker 重新分配新端口"
+      PORT=""
+    fi
+  fi
 fi
 
 # ── 7. 创建数据目录 ──────────────────────────────────

@@ -140,16 +140,9 @@ docker images "$IMAGE" --format "  镜像: {{.Repository}}:{{.Tag}}  ID: {{.ID}}
 
 # ── 4. 判断新建 or 升级 ──────────────────────────────
 EXISTING=$(docker ps -a --filter "label=openworker.worker-id=$WORKER_ID" --format '{{.Names}}' | head -1)
-PORT=""
 
 if [ -n "$EXISTING" ]; then
   echo "检测到已有容器：$EXISTING（升级模式）"
-  PORT=$(docker inspect "$EXISTING" --format '{{(index (index .NetworkSettings.Ports "4096/tcp") 0).HostPort}}' 2>/dev/null || true)
-  if [ -n "$PORT" ]; then
-    echo "  保留端口：$PORT"
-  else
-    echo "  旧容器无端口映射，新容器交给 docker 自动分配"
-  fi
 fi
 
 # ── 5. CLEAN 模式 ────────────────────────────────────
@@ -163,28 +156,9 @@ if [ -n "$EXISTING" ]; then
   echo "停止并删除旧容器..."
   docker stop "$EXISTING" 2>/dev/null || true
   docker rm "$EXISTING" 2>/dev/null || true
-
-  # docker stop 后 docker-proxy 释放端口可能有延迟，且历史上端口分配 bug 可能让
-  # 多个 worker"声明"过同一端口（旧的端口扫描算法看错时刻）— 升级前 verify 端口
-  # 是否真空闲。被别的进程占 → 放弃 reuse，交给 docker 自动分配新端口。
-  if [ -n "$PORT" ]; then
-    for _ in 1 2 3 4 5; do
-      if ! ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT\b"; then
-        break
-      fi
-      sleep 0.5
-    done
-    if ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT\b"; then
-      echo "  ⚠ 端口 $PORT 仍被其他进程占用，将让 docker 重新分配新端口"
-      PORT=""
-    fi
-  fi
 fi
 
 # ── 7. 创建数据目录 ──────────────────────────────────
-# 端口由 docker daemon 自分配（详见步骤 8 的 -p "4096"），
-# 这样并行部署也不会撞，主机上其他服务占的端口也自动避开。
-
 mkdir -p "$DATA_DIR/$WORKER_ID"
 if $IS_LINUX; then
   chown -R 1000:1000 "$DATA_DIR/$WORKER_ID"
@@ -192,13 +166,6 @@ fi
 
 # ── 8. 构建 docker run 参数 ──────────────────────────
 IMAGE_SHA=$(docker inspect --format '{{.Id}}' "$IMAGE" | cut -c8-19)
-
-# 升级模式保留旧端口；新建模式让 docker 自分配（避免端口扫描的 race condition）
-if [ -n "$PORT" ]; then
-  PORT_ARG="${PORT}:4096"
-else
-  PORT_ARG="4096"
-fi
 
 RUN_ARGS=(
   -d
@@ -220,7 +187,12 @@ RUN_ARGS=(
   --label "openworker.managed-by=openworker-bot-install-v2"
   --label "openworker.version=$IMAGE_SHA"
   --label "openworker.engine=opencode"
-  -p "$PORT_ARG"
+  # #927: OC's HTTP API binds 127.0.0.1 inside the container and is
+  # never published. A docker `-p` would DNAT host traffic to the
+  # container's eth0 IP, where nothing listens (connection refused) —
+  # and publishing it at all was the cross-container apiKey / file /
+  # session exfil hole. Debug the OC API from inside the container:
+  # `docker exec <ctr> curl -u opencode:openworker-local http://127.0.0.1:4096/...`
   -v "$DATA_DIR/$WORKER_ID:/openworker/data"
   -e "WORKER_ID=$WORKER_ID"
   -e "TZ=$TZ"
@@ -234,12 +206,6 @@ RUN_ARGS=(
 # ── 9. 启动容器 ─────────────────────────────────────
 echo "启动容器..."
 docker run "${RUN_ARGS[@]}" "$IMAGE"
-
-# 新建模式：从 docker 拿真实分配的 host port
-if [ -z "$PORT" ]; then
-  PORT=$(docker port "$CONTAINER_NAME" 4096/tcp | head -1 | awk -F: '{print $NF}')
-  echo "  分配端口：$PORT（由 docker daemon 自动分配）"
-fi
 
 # ── 10. 等待就绪 ─────────────────────────────────────
 # Default 180s — first-time OpenCode boot + Hub WS registration on a slow
@@ -290,7 +256,6 @@ if $READY; then
   echo "=== 部署成功 ==="
   echo ""
   echo "  容器名：$CONTAINER_NAME"
-  echo "  端口：$PORT（OpenCode HTTP API）"
   echo "  引擎：OpenCode"
   echo "  渠道：Hub"
   echo "  数据目录：$DATA_DIR/$WORKER_ID"
@@ -324,11 +289,11 @@ if $READY; then
   echo "  卸载：docker stop $CONTAINER_NAME && docker rm $CONTAINER_NAME"
   echo "  清除数据：rm -rf $DATA_DIR/$WORKER_ID"
   echo ""
-  echo "监控 API："
+  echo "监控 API（#927：OC HTTP API 仅容器内 127.0.0.1 可达，不对外发布）："
   # V2 entrypoint hardcodes the server password — no file to read.
   OC_PASS="openworker-local"
-  echo "  Health: curl -u opencode:$OC_PASS http://<host>:$PORT/global/health"
-  echo "  Sessions: curl -u opencode:$OC_PASS http://<host>:$PORT/session"
+  echo "  Health: docker exec $CONTAINER_NAME curl -sf -u opencode:$OC_PASS http://127.0.0.1:4096/global/health"
+  echo "  Sessions: docker exec $CONTAINER_NAME curl -s -u opencode:$OC_PASS http://127.0.0.1:4096/session"
 else
   echo "=== 部署超时 ==="
   echo "OpenCode 未在 ${TIMEOUT} 秒内就绪，但容器仍在运行。"

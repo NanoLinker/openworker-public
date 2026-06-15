@@ -204,6 +204,15 @@ RUN_ARGS=(
   -d
   --name "$CONTAINER_NAME"
   --restart unless-stopped
+  # NET_ADMIN: entrypoint.sh 启动 OC 前设 iptables, 把 OC HTTP loopback
+  # :4096 锁到 uid 0 + 2000, 阻 visitor uid 2002 / nobody 65534 通过
+  # 公开密码字面量绕过 plugin guard 用 OC 身份读 token / runtime.db
+  # (confused-deputy 攻击)。Capability 是 docker daemon 启动 container
+  # 之前 freeze 的, 容器内 root 也 raise 不了。不给这个 cap entrypoint
+  # 会 FATAL exit 1 —— 故意, silent-skip 会让安全模型 unenforced 但
+  # 容器看着健康, 比硬 fail 危险得多。openworker repo `docs/security-
+  # model.md` §4.2 / §6.
+  --cap-add NET_ADMIN
   ${CONTAINER_CPUS:+--cpus "$CONTAINER_CPUS"}
   ${CONTAINER_MEMORY:+--memory "$CONTAINER_MEMORY"}
   ${CONTAINER_MEMORY_SWAP:+--memory-swap "$CONTAINER_MEMORY_SWAP"}
